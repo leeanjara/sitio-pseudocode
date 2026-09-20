@@ -84,12 +84,6 @@ class Para(Nodo):
     cuerpo: list
 
 
-@dataclass
-class Repetir(Nodo):
-    cuerpo: list
-    condicion: Nodo
-
-
 # ------------------------------------------------------------- Declaraciones
 
 @dataclass

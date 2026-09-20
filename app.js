@@ -399,6 +399,8 @@ function arrancarWorker() {
       case "listo":
         definirModo(data.vocabulario);
         editor.setOption("mode", "pseudo");
+        // La referencia pinta sus ejemplos con este mismo modo.
+        if (window.Ayuda) window.Ayuda.modoListo();
         estado = "listo";
         btnEjecutar.disabled = false;
         ponerEstado(INTERACTIVO ? "Listo" : "Listo (modo datos precargados)", "bien");
@@ -430,6 +432,7 @@ function arrancarWorker() {
 btnEjecutar.addEventListener("click", ejecutar);
 btnDetener.addEventListener("click", detener);
 $("btn-limpiar").addEventListener("click", limpiarConsola);
+$("btn-ayuda").addEventListener("click", () => window.Ayuda.abrir());
 
 // Si el programa está esperando un dato, hacer clic en cualquier parte del resultado
 // devuelve el cursor al campo: es lo que uno intenta cuando lo perdió.

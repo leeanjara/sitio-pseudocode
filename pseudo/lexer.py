@@ -4,17 +4,17 @@ from dataclasses import dataclass
 
 PALABRAS_RESERVADAS = {
     "Programa", "Var", "Funcion", "Procedimiento", "Inicio", "Fin",
-    "Si", "Sino", "Mientras", "Para", "Hasta", "Repetir", "Que",
-    "Y", "O", "No", "ref", "Verdadero", "Falso", "Mostrar", "Leer",
+    "Si", "Sino", "Mientras", "Para",
+    "Y", "O", "Mod", "Ref", "Verdadero", "Falso", "Mostrar", "Leer",
 }
 # 'Cadena' y 'String' son el mismo tipo; adentro se usa siempre 'String'.
-TIPOS = {"Entero", "Flotante", "String", "Cadena", "Booleano", "Caracter"}
+TIPOS = {"Entero", "Real", "String", "Cadena", "Logico", "Caracter"}
 CANONICO = {"Cadena": "String"}
 
 OPERADORES_DOBLES = {"==", "!=", "<=", ">=", "++", "--", "+=", "-=", "*=", "/=", "%="}
 # Operadores de acumulación: 'total += 1' es lo mismo que 'total = total + 1'.
 COMPUESTOS = {"+=": "+", "-=": "-", "*=": "*", "/=": "/", "%=": "%"}
-OPERADORES_SIMPLES = set("<>=+-*/%(),")
+OPERADORES_SIMPLES = set("<>=+-*/%(),!")
 
 # Símbolos de otros lenguajes: se reportan, pero se reemplazan por su equivalente
 # para que el resto del análisis pueda continuar.
@@ -35,13 +35,11 @@ PALABRAS_JUNTAS = {
     "finmientras": ("Fin", "Mientras"),
     "finpara": ("Fin", "Para"),
     "sinosi": ("Sino", "Si"),
-    "hastaque": ("Hasta", "Que"),
 }
 # Palabra reservada seguida de otra escrita en minúscula (ej: "Fin si").
 CORRECCIONES_TRAS = {
     "Fin": {"si": "Si", "mientras": "Mientras", "para": "Para"},
     "Sino": {"si": "Si"},
-    "Hasta": {"que": "Que"},
 }
 
 
@@ -176,11 +174,6 @@ def tokenizar(fuente, diag):
             agregar("OP", dos, col)
             i += 2
             continue
-        if c == "!":
-            diag.error("usá 'No' en lugar de '!'", linea, col)
-            agregar("KW", "No", col)
-            i += 1
-            continue
         if c in OPERADORES_SIMPLES:
             agregar("OP", c, col)
             i += 1
@@ -202,4 +195,27 @@ def tokenizar(fuente, diag):
                 diag.error(f"se escribe '{a.valor} {correcto}' (con mayúscula)", b.linea, b.col)
                 b.tipo, b.valor = "KW", correcto
 
+    _un_solo_nombre_para_el_texto(tokens, diag)
     return tokens
+
+
+def _un_solo_nombre_para_el_texto(tokens, diag):
+    """'String' y 'Cadena' son el mismo tipo, pero hay que elegir uno y no mezclarlos.
+
+    Se respeta el que aparece primero: es el que el estudiante eligió, y así el programa
+    queda parejo sin que el verificador imponga un nombre.
+    """
+    usos = {"String": [], "Cadena": []}
+    for t in tokens:
+        if t.tipo == "TIPO" and t.valor in usos:
+            usos[t.valor].append(t)
+    if not (usos["String"] and usos["Cadena"]):
+        return
+
+    elegido = min(usos, key=lambda n: (usos[n][0].linea, usos[n][0].col))
+    otro = "Cadena" if elegido == "String" else "String"
+    primero = usos[elegido][0]
+    for t in usos[otro]:
+        diag.error(f"este programa ya usa '{elegido}' (línea {primero.linea}): son el mismo "
+                   f"tipo, pero hay que elegir uno solo y usarlo en todo el programa",
+                   t.linea, t.col)

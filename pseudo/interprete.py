@@ -16,7 +16,7 @@ class ErrorEjecucion(Exception):
 
 
 class Celda:
-    """Lugar donde vive el valor de una variable (compartible por parámetros 'ref')."""
+    """Lugar donde vive el valor de una variable (compartible por parámetros 'Ref')."""
     __slots__ = ("tipo", "valor")
 
     def __init__(self, tipo, valor=None):
@@ -25,7 +25,7 @@ class Celda:
 
 
 def convertir(tipo, valor):
-    if tipo == "Flotante" and type(valor) is int:
+    if tipo == "Real" and type(valor) is int:
         return float(valor)
     return valor
 
@@ -107,12 +107,6 @@ class Interprete:
             while self.evaluar(s.condicion, marco):
                 self.contar_paso(s)
                 self.bloque(s.cuerpo, marco)
-        elif isinstance(s, N.Repetir):
-            while True:
-                self.contar_paso(s)
-                self.bloque(s.cuerpo, marco)
-                if self.evaluar(s.condicion, marco):
-                    break
         elif isinstance(s, N.Para):
             self.para(s, marco)
 
@@ -132,12 +126,12 @@ class Interprete:
         try:
             if tipo == "Entero":
                 return int(limpio)
-            if tipo == "Flotante":
+            if tipo == "Real":
                 return float(limpio.replace(",", "."))
         except ValueError:
             raise ErrorEjecucion(f"Leer({variable.nombre}): se esperaba un número {tipo}, pero se "
                                  f"ingresó '{texto}'", variable)
-        if tipo == "Booleano":
+        if tipo == "Logico":
             if limpio.lower() in ("verdadero", "falso"):
                 return limpio.lower() == "verdadero"
             raise ErrorEjecucion(f"Leer({variable.nombre}): se esperaba Verdadero o Falso, pero se "
@@ -152,7 +146,7 @@ class Interprete:
     def llamar(self, llamada, marco):
         predefinida = PREDEFINIDAS.get(llamada.nombre)
         if predefinida is not None:
-            # A los parámetros 'ref' se les pasa la celda, para que puedan devolver un valor.
+            # A los parámetros 'Ref' se les pasa la celda, para que puedan devolver un valor.
             valores = [self.celda(arg.nombre, marco) if p.ref else self.evaluar(arg, marco)
                        for p, arg in zip(predefinida.sub.parametros, llamada.args)]
             return predefinida.implementacion(*valores)
@@ -198,7 +192,7 @@ class Interprete:
             return self.llamar(e, marco)
         if isinstance(e, N.Unaria):
             v = self.evaluar(e.operando, marco)
-            return {"No": lambda: not v, "-": lambda: -v, "+": lambda: v}[e.op]()
+            return {"!": lambda: not v, "-": lambda: -v, "+": lambda: v}[e.op]()
 
         op = e.op
         if op == "Y":

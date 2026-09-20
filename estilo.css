@@ -13,6 +13,16 @@
   --mono: ui-monospace, "Cascadia Code", "Consolas", "SF Mono", monospace;
 }
 
+/* Las tipografías de programación unen '==', '!=', '++' en un solo dibujo ('≠', '≤').
+   Queda lindo pero acá estorba: el estudiante tiene que ver los caracteres que realmente
+   hay que teclear, y además esos dibujos se cortan en los bloques de la referencia.
+   Va en :root y no en una lista de elementos porque se hereda: así no queda ningún
+   rincón afuera (los títulos de la referencia se habían escapado de la primera versión). */
+:root {
+  font-variant-ligatures: none;
+  font-feature-settings: "liga" 0, "clig" 0, "calt" 0;
+}
+
 @media (prefers-color-scheme: dark) {
   :root {
     --fondo: #14171c;
@@ -323,6 +333,200 @@ button.enlace:hover { color: var(--acento); }
   background: var(--fondo);
   color: var(--texto);
   resize: vertical;
+}
+
+/* ------------------------------------------------- referencia */
+
+.ayuda-fondo {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  display: flex;
+  padding: 24px;
+  background: rgba(0, 0, 0, 0.45);
+  backdrop-filter: blur(2px);
+}
+
+/* Sin esto el panel no se cierra: el 'display: flex' de arriba le gana al 'display:
+   none' que el navegador le da a [hidden], porque los estilos del autor van primero. */
+.ayuda-fondo[hidden] { display: none; }
+
+.ayuda-caja {
+  display: flex;
+  flex-direction: column;
+  width: min(1100px, 100%);
+  max-height: 100%;
+  margin: auto;
+  overflow: hidden;
+  background: var(--papel);
+  border: 1px solid var(--borde);
+  border-radius: 12px;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.35);
+}
+
+.ayuda-cabecera {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-shrink: 0;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--borde);
+}
+
+.ayuda-cabecera h2 {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.ayuda-buscador {
+  flex: 1;
+  min-width: 0;
+  font: inherit;
+  font-size: 14px;
+  padding: 7px 12px;
+  color: var(--texto);
+  background: var(--fondo);
+  border: 1px solid var(--borde);
+  border-radius: 7px;
+}
+.ayuda-buscador:focus { outline: 2px solid var(--acento); outline-offset: -1px; }
+
+.ayuda-cerrar {
+  flex-shrink: 0;
+  padding: 2px 10px;
+  font-size: 20px;
+  line-height: 1.2;
+  color: var(--texto);
+  background: none;
+  border: 1px solid var(--borde);
+}
+
+.ayuda-cuerpo {
+  display: flex;
+  min-height: 0;
+  flex: 1;
+}
+
+.ayuda-indice {
+  flex-shrink: 0;
+  width: 220px;
+  padding: 14px 8px 14px 16px;
+  overflow-y: auto;
+  border-right: 1px solid var(--borde);
+}
+
+.ayuda-grupo { margin-bottom: 14px; }
+
+.ayuda-grupo-titulo {
+  margin: 0 0 4px;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--suave);
+}
+
+.ayuda-indice a {
+  display: block;
+  padding: 3px 8px;
+  font-size: 13.5px;
+  color: var(--texto);
+  text-decoration: none;
+  border-radius: 5px;
+}
+.ayuda-indice a:hover { background: rgba(127, 127, 127, 0.12); color: var(--acento); }
+
+.ayuda-contenido {
+  flex: 1;
+  min-width: 0;
+  padding: 18px 24px 60px;
+  overflow-y: auto;
+}
+
+.ayuda-bajada {
+  margin: 0 0 20px;
+  font-size: 14px;
+  line-height: 1.6;
+  color: var(--suave);
+}
+
+.ayuda-seccion > h2 {
+  margin: 28px 0 4px;
+  padding-bottom: 6px;
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: var(--suave);
+  border-bottom: 1px solid var(--borde);
+}
+.ayuda-seccion:first-of-type > h2 { margin-top: 0; }
+
+.ayuda-tema { padding: 18px 0; border-bottom: 1px solid var(--borde); }
+.ayuda-tema:last-child { border-bottom: none; }
+
+.ayuda-tema h3 {
+  margin: 0 0 6px;
+  font-family: var(--mono);
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--acento);
+}
+
+.ayuda-tema h4 {
+  margin: 14px 0 5px;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--suave);
+}
+
+.ayuda-resumen { margin: 0; font-size: 14.5px; line-height: 1.6; }
+
+.ayuda-codigo {
+  margin: 0;
+  padding: 10px 14px;
+  overflow-x: auto;
+  font-family: var(--mono);
+  font-size: 13.5px;
+  line-height: 1.6;
+  white-space: pre;
+  color: var(--texto);
+  background: var(--fondo);
+  border: 1px solid var(--borde);
+  border-radius: 7px;
+  /* Hereda los colores de .CodeMirror .cm-*, pero no su posicionamiento. */
+  position: static;
+}
+
+.ayuda-notas {
+  margin: 12px 0 0;
+  padding-left: 20px;
+  font-size: 13.5px;
+  line-height: 1.6;
+  color: var(--suave);
+}
+.ayuda-notas li { margin-bottom: 4px; }
+
+.ayuda-sin-resultados { padding: 20px 0; color: var(--suave); }
+
+@media (max-width: 860px) {
+  .ayuda-fondo { padding: 0; }
+  /* A pantalla completa: centrada dejaría franjas arriba y abajo. */
+  .ayuda-caja { height: 100%; max-height: 100%; border: none; border-radius: 0; }
+  .ayuda-cuerpo { flex-direction: column; }
+  .ayuda-indice {
+    width: auto;
+    max-height: 30vh;
+    padding: 12px 16px;
+    border-right: none;
+    border-bottom: 1px solid var(--borde);
+  }
+  .ayuda-contenido { padding: 16px; }
+  .ayuda-cabecera h2 { display: none; }
 }
 
 /* ------------------------------------------------------- angosto */

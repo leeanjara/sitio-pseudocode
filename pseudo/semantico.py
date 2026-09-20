@@ -2,9 +2,14 @@
 import difflib
 
 from . import nodos as N
+from .lexer import PALABRAS_RESERVADAS, TIPOS, normalizar
 from .predefinidas import PREDEFINIDAS
 
-NUMERICOS = {"Entero", "Flotante"}
+# Palabra reservada escrita de cualquier forma -> cómo se escribe de verdad. Sirve para
+# que 'verdadero' o 'falso' no se reporten como una variable que falta declarar.
+RESERVADAS_POR_FORMA = {normalizar(p): p for p in PALABRAS_RESERVADAS | TIPOS}
+
+NUMERICOS = {"Entero", "Real"}
 TEXTO = {"String", "Caracter"}
 COMPARADORES = {"==", "!=", "<", ">", "<=", ">="}
 SUBPROGRAMAS = ("funcion", "procedimiento")
@@ -13,7 +18,7 @@ SUBPROGRAMAS = ("funcion", "procedimiento")
 def asignable(destino, origen):
     if destino is None or origen is None or destino == origen:
         return True
-    return (destino, origen) in {("Flotante", "Entero"), ("String", "Caracter")}
+    return (destino, origen) in {("Real", "Entero"), ("String", "Caracter")}
 
 
 def articulo(sub):
@@ -105,6 +110,15 @@ class Analizador:
         if clave in self.no_declarados:
             return
         self.no_declarados.add(clave)
+
+        # Si el nombre es en realidad una palabra reservada mal escrita, decirlo: mandarlo
+        # a declarar una variable llamada 'verdadero' lo mandaría para el lado contrario.
+        reservada = RESERVADAS_POR_FORMA.get(normalizar(nombre))
+        if reservada is not None and reservada != nombre:
+            self.diag.error(f"'{nombre}' no es una variable: es la palabra reservada "
+                            f"'{reservada}', que se escribe así", nodo.linea, nodo.col)
+            return
+
         visibles = list(self.globales) + list(self.locales or {}) + list(PREDEFINIDAS)
         parecidos = [v for v in visibles if v.lower() == nombre.lower()]
         parecidos += difflib.get_close_matches(nombre, visibles, n=1, cutoff=0.75)
@@ -194,9 +208,6 @@ class Analizador:
         elif isinstance(s, N.Mientras):
             self.condicion(s.condicion, "Mientras")
             self.bloque(s.cuerpo)
-        elif isinstance(s, N.Repetir):
-            self.bloque(s.cuerpo)
-            self.condicion(s.condicion, "Hasta Que")
         elif isinstance(s, N.Para):
             self.para(s)
 
@@ -255,7 +266,7 @@ class Analizador:
 
     def condicion(self, condicion, instruccion):
         tipo = self.tipo(condicion)
-        if tipo not in (None, "Booleano"):
+        if tipo not in (None, "Logico"):
             self.diag.error(f"la condición del '{instruccion}' tiene que ser una comparación o una "
                             f"expresión lógica, pero es de tipo {tipo}",
                             condicion.linea, condicion.col)
@@ -263,7 +274,7 @@ class Analizador:
     def verificar_asignable(self, destino, origen, nodo, que):
         if asignable(destino, origen):
             return
-        extra = " (se perdería la parte decimal)" if (destino, origen) == ("Entero", "Flotante") else ""
+        extra = " (se perdería la parte decimal)" if (destino, origen) == ("Entero", "Real") else ""
         self.diag.error(f"{que} es {destino}, pero se le quiere dar un valor {origen}{extra}",
                         nodo.linea, nodo.col)
 
@@ -302,12 +313,12 @@ class Analizador:
 
     def tipo_unaria(self, e):
         tipo = self.tipo(e.operando)
-        if e.op == "No":
-            if tipo not in (None, "Booleano"):
-                self.diag.error(f"'No' se aplica a condiciones (Booleano), no a un {tipo}",
+        if e.op == "!":
+            if tipo not in (None, "Logico"):
+                self.diag.error(f"'!' se aplica a condiciones (Logico), no a un {tipo}",
                                 e.linea, e.col)
-            return "Booleano"
-        if tipo not in (None, "Entero", "Flotante"):
+            return "Logico"
+        if tipo not in (None, "Entero", "Real"):
             self.diag.error(f"el signo '{e.op}' solo se aplica a números, no a un {tipo}",
                             e.linea, e.col)
             return None
@@ -319,20 +330,20 @@ class Analizador:
 
         if op in ("Y", "O"):
             for tipo, lado in ((a, e.izq), (b, e.der)):
-                if tipo not in (None, "Booleano"):
-                    self.diag.error(f"'{op}' une condiciones (Booleano), pero de este lado hay un "
+                if tipo not in (None, "Logico"):
+                    self.diag.error(f"'{op}' une condiciones (Logico), pero de este lado hay un "
                                     f"{tipo}", lado.linea, lado.col)
-            return "Booleano"
+            return "Logico"
         if a is None or b is None:
-            return "Booleano" if op in COMPARADORES else None
+            return "Logico" if op in COMPARADORES else None
 
         if op in COMPARADORES:
             valido = ((a in NUMERICOS and b in NUMERICOS) or (a in TEXTO and b in TEXTO)
-                      or (op in ("==", "!=") and a == b == "Booleano"))
+                      or (op in ("==", "!=") and a == b == "Logico"))
             if not valido:
                 self.diag.error(f"no se puede comparar un {a} con un {b} usando '{op}'",
                                 e.linea, e.col)
-            return "Booleano"
+            return "Logico"
         if op == "+" and a in TEXTO and b in TEXTO:
             return "String"
         # Si viene de 'x += 1' los mensajes hablan de '+=', que es lo que escribió el alumno.
@@ -343,7 +354,7 @@ class Analizador:
                                 f"acá hay {a} y {b}", e.linea, e.col)
             return "Entero"
         if a in NUMERICOS and b in NUMERICOS:
-            return "Flotante" if "Flotante" in (a, b) else "Entero"
+            return "Real" if "Real" in (a, b) else "Entero"
 
         mensaje = f"no se puede usar '{escrito}' entre un {a} y un {b}"
         if escrito == "+" and (a in TEXTO or b in TEXTO):
@@ -392,7 +403,7 @@ class Analizador:
                 continue
             if not isinstance(a, N.Variable):
                 self.diag.error(f"el parámetro '{p.nombre}' de '{sub.nombre}' es por referencia "
-                                "(ref): hay que pasarle una variable, no una expresión",
+                                "(Ref): hay que pasarle una variable, no una expresión",
                                 a.linea, a.col)
                 self.tipo(a)
                 continue
@@ -401,10 +412,10 @@ class Analizador:
                 continue
             if simbolo.clase in SUBPROGRAMAS:
                 self.diag.error(f"el parámetro '{p.nombre}' de '{sub.nombre}' es por referencia "
-                                "(ref): hay que pasarle una variable", a.linea, a.col)
+                                "(Ref): hay que pasarle una variable", a.linea, a.col)
                 continue
             simbolo.leido = True
             if simbolo.tipo != p.tipo:
                 self.diag.error(f"el parámetro por referencia '{p.nombre}' es {p.tipo}, pero la "
-                                f"variable '{a.nombre}' es {simbolo.tipo}; con 'ref' los tipos "
+                                f"variable '{a.nombre}' es {simbolo.tipo}; con 'Ref' los tipos "
                                 "tienen que coincidir exactamente", a.linea, a.col)

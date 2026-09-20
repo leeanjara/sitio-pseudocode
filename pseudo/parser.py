@@ -6,13 +6,12 @@ Gramática (resumida):
     bloque_var    := 'Var' NL (ID {',' ID} TIPO NL)*
     subprograma   := 'Funcion' ID '(' params ')' TIPO NL [bloque_var] 'Inicio' NL sentencias 'Fin'
                    | 'Procedimiento' ID '(' params ')' NL [bloque_var] 'Inicio' NL sentencias 'Fin'
-    params        := [ ['ref'] ID TIPO {',' ['ref'] ID TIPO} ]
+    params        := [ ['Ref'] ID TIPO {',' ['Ref'] ID TIPO} ]
     sentencia     := asignacion | ID '(' args ')' | 'Mostrar' '(' args ')' | 'Leer' '(' ID {',' ID} ')'
                    | 'Si' '(' expr ')' ... {'Sino' 'Si' '(' expr ')' ...} ['Sino' ...] 'Fin' 'Si'
                    | 'Mientras' '(' expr ')' ... 'Fin' 'Mientras'
                    | 'Para' '(' asignacion ',' asignacion ',' expr ')' ... 'Fin' 'Para'
     asignacion    := ID '=' expr | ID ('+=' | '-=' | '*=' | '/=' | '%=') expr | ID ('++' | '--')
-                   | 'Repetir' ... 'Hasta' ['Que'] '(' expr ')'
 """
 from . import nodos as N
 from .diagnosticos import ErrorSintaxis
@@ -25,21 +24,31 @@ COMPARADORES = ("==", "!=", "<", ">", "<=", ">=")
 # o con el nombre de otro lenguaje, y la forma correcta.
 SUGERENCIAS_SENTENCIA = {
     "si": "Si", "sino": "Sino", "fin": "Fin", "mientras": "Mientras", "para": "Para",
-    "repetir": "Repetir", "hasta": "Hasta", "mostrar": "Mostrar", "leer": "Leer",
+    "mostrar": "Mostrar", "leer": "Leer",
     "inicio": "Inicio", "escribir": "Mostrar", "imprimir": "Mostrar", "print": "Mostrar",
     "input": "Leer",
 }
-INSTRUCCIONES_CON_BLOQUE = {"Si", "Mientras", "Para", "Repetir", "Mostrar", "Leer"}
+INSTRUCCIONES_CON_BLOQUE = {"Si", "Mientras", "Para", "Mostrar", "Leer"}
 PALABRAS_RETORNO ={"retornar", "return", "devolver", "retorna", "devuelve", "regresar"}
+# Instrucciones que existen en otros pseudocódigos pero no en este, con la alternativa.
+INSTRUCCIONES_DE_OTRAS_NOTACIONES = {
+    "repetir": "para repetir se usan 'Mientras(...)' o 'Para (...)'",
+    "hacer": "para repetir se usan 'Mientras(...)' o 'Para (...)'",
+    "mientrasque": "se escribe 'Mientras(condición)'",
+    "segun": "no hay 'Segun'/'Casos': encadená 'Si' y 'Sino Si'",
+    "casos": "no hay 'Segun'/'Casos': encadená 'Si' y 'Sino Si'",
+}
+# Operadores que son palabras: se escriben con mayúscula como el resto de las reservadas.
+OPERADORES_PALABRA = {"y": "Y", "o": "O", "mod": "Mod"}
 SUGERENCIAS_TIPO = {
     "entero": "Entero", "int": "Entero", "integer": "Entero",
-    "flotante": "Flotante", "float": "Flotante", "real": "Flotante", "double": "Flotante",
-    "decimal": "Flotante",
+    "flotante": "Real", "float": "Real", "real": "Real", "double": "Real",
+    "decimal": "Real",
     "string": "String", "cadena": "Cadena", "texto": "String", "str": "String",
-    "booleano": "Booleano", "bool": "Booleano", "boolean": "Booleano", "logico": "Booleano",
+    "booleano": "Logico", "bool": "Logico", "boolean": "Logico", "logico": "Logico",
     "caracter": "Caracter", "char": "Caracter",
 }
-TIPOS_TEXTO = "Entero, Flotante, String (o Cadena), Booleano o Caracter"
+TIPOS_TEXTO = "Entero, Real, String (o Cadena), Logico o Caracter"
 FORMA_PARA = "Para (i = 0, i++, i < 10)"
 MENSAJE_MAYUSCULAS = "las palabras reservadas distinguen mayúsculas y no llevan tilde"
 
@@ -157,7 +166,7 @@ class Parser:
             if sig.tipo == "KW" and sig.valor in ("Si", "Mientras", "Para"):
                 return "Fin " + sig.valor
             return "Fin"
-        if tok.valor in ("Sino", "Hasta"):
+        if tok.valor == "Sino":
             return tok.valor
         return None
 
@@ -191,6 +200,8 @@ class Parser:
             elif self.act.tipo == "ID" and normalizar(self.act.valor) in ("funcion", "procedimiento"):
                 correcto = "Funcion" if normalizar(self.act.valor) == "funcion" else "Procedimiento"
                 raise self.error_esperado("'Funcion', 'Procedimiento' o 'Inicio'", correcto)
+            elif self.act.tipo == "ID" and normalizar(self.act.valor) == "var":
+                raise self.error(f"se escribe 'Var' con mayúscula, no '{self.act.valor}'")
             else:
                 break
 
@@ -273,12 +284,14 @@ class Parser:
         if not self.es_op(")"):
             while True:
                 ref = False
-                if self.es_kw("ref"):
+                if self.es_kw("Ref"):
                     self.avanzar()
                     ref = True
                 elif (self.act.tipo == "ID" and normalizar(self.act.valor) == "ref"
                       and self.ver().tipo == "ID"):
-                    raise self.error(f"se escribe 'ref' en minúscula, no '{self.act.valor}'")
+                    # Sigue habiendo un nombre después, así que quiso escribir la palabra
+                    # clave. Un parámetro que se llame 'ref' a secas es válido.
+                    raise self.error(f"se escribe 'Ref' con mayúscula, no '{self.act.valor}'")
                 p = self.esperar_id("el nombre del parámetro")
                 if self.es_op(","):
                     raise self.error("cada parámetro necesita su propio tipo "
@@ -353,7 +366,7 @@ class Parser:
     @staticmethod
     def mensaje_cierre_suelto(cierre):
         abridor = {"Fin Si": "Si", "Sino": "Si", "Fin Mientras": "Mientras",
-                   "Fin Para": "Para", "Hasta": "Repetir"}[cierre]
+                   "Fin Para": "Para"}[cierre]
         return f"'{cierre}' sin un '{abridor}' abierto"
 
     def parse_sentencia(self):
@@ -361,7 +374,7 @@ class Parser:
         if tok.tipo == "KW":
             metodo = {
                 "Si": self.parse_si, "Mientras": self.parse_mientras, "Para": self.parse_para,
-                "Repetir": self.parse_repetir, "Mostrar": self.parse_mostrar,
+                "Mostrar": self.parse_mostrar,
                 "Leer": self.parse_leer,
             }.get(tok.valor)
             if metodo:
@@ -379,6 +392,9 @@ class Parser:
                 if clave in PALABRAS_RETORNO:
                     raise self.error(f"no existe '{tok.valor}': una función devuelve su valor "
                                      "asignándolo a su propio nombre (ej: calcular_edad = edad)")
+                if clave in INSTRUCCIONES_DE_OTRAS_NOTACIONES:
+                    raise self.error(f"no existe '{tok.valor}' en este pseudocódigo: "
+                                     f"{INSTRUCCIONES_DE_OTRAS_NOTACIONES[clave]}")
                 correcto = SUGERENCIAS_SENTENCIA.get(clave)
                 if correcto and correcto != tok.valor:
                     mensaje = (f"'{tok.valor}' no es una instrucción válida; ¿quisiste escribir "
@@ -520,21 +536,6 @@ class Parser:
             return N.Asignacion(tok.linea, tok.col, tok.valor, self.parse_expr())
         return None
 
-    def parse_repetir(self):
-        inicio = self.avanzar()
-        self.fin_linea_tolerante()
-        cuerpo = self.parse_bloque({"Hasta"})
-        condicion = None
-        if self.cierre() == "Hasta":
-            self.avanzar()
-            if self.es_kw("Que"):
-                self.avanzar()
-            condicion = self.parse_cabecera(lambda: self.parse_condicion("Hasta Que"))
-        else:
-            self.diag.error(f"falta 'Hasta Que(condición)' para cerrar el 'Repetir' de la línea "
-                            f"{inicio.linea}", self.act.linea, self.act.col)
-        return N.Repetir(inicio.linea, inicio.col, cuerpo, condicion)
-
     def parse_argumentos(self, instruccion):
         if not self.es_op("("):
             raise self.error(f"'{instruccion}' lleva paréntesis: {instruccion}(...)")
@@ -574,7 +575,16 @@ class Parser:
     # ------------------------------------------------------------ expresiones
 
     def parse_expr(self):
-        return self.parse_o()
+        izq = self.parse_o()
+        # Terminada la expresión, un nombre suelto donde iba un operador es casi seguro
+        # un 'Y', 'O' o 'Mod' escrito en minúscula. Sin esto el error hablaría del
+        # paréntesis que falta, que no es lo que el estudiante hizo mal.
+        if self.act.tipo == "ID":
+            correcto = OPERADORES_PALABRA.get(normalizar(self.act.valor))
+            if correcto:
+                raise self.error(f"se escribe '{correcto}' con mayúscula, "
+                                 f"no '{self.act.valor}'")
+        return izq
 
     def parse_o(self):
         izq = self.parse_y()
@@ -584,16 +594,24 @@ class Parser:
         return izq
 
     def parse_y(self):
-        izq = self.parse_no()
+        izq = self.parse_negacion()
         while self.es_kw("Y"):
             op = self.avanzar()
-            izq = N.Binaria(op.linea, op.col, "Y", izq, self.parse_no())
+            izq = N.Binaria(op.linea, op.col, "Y", izq, self.parse_negacion())
         return izq
 
-    def parse_no(self):
-        if self.es_kw("No"):
+    def parse_negacion(self):
+        if self.es_op("!"):
             op = self.avanzar()
-            return N.Unaria(op.linea, op.col, "No", self.parse_no())
+            return N.Unaria(op.linea, op.col, "!", self.parse_negacion())
+        # Quien escribe 'No' viene de otra notación: acá se niega con '!'. Se mira el
+        # token siguiente para no pisar una variable que se llame 'no'.
+        siguiente = self.ver()
+        if (self.act.tipo == "ID" and normalizar(self.act.valor) == "no"
+                and (siguiente.tipo in ("ID", "ENTERO", "FLOTANTE", "CADENA", "CARACTER", "KW")
+                     or (siguiente.tipo == "OP" and siguiente.valor == "("))):
+            raise self.error(f"para negar se usa '!', no '{self.act.valor}' "
+                             "(ej: !(edad >= 18))")
         return self.parse_comparacion()
 
     def parse_comparacion(self):
@@ -617,10 +635,22 @@ class Parser:
 
     def parse_mult(self):
         izq = self.parse_unario()
-        while self.es_op("*", "/", "%"):
-            op = self.avanzar()
-            izq = N.Binaria(op.linea, op.col, op.valor, izq, self.parse_unario())
-        return izq
+        while True:
+            # 'Mod' es otra forma de escribir '%': se traduce acá y el resto del
+            # verificador no se entera de la diferencia.
+            if self.es_kw("Mod"):
+                op = self.avanzar()
+                izq = N.Binaria(op.linea, op.col, "%", izq, self.parse_unario())
+                continue
+            if self.es_op("*", "/", "%"):
+                op = self.avanzar()
+                izq = N.Binaria(op.linea, op.col, op.valor, izq, self.parse_unario())
+                continue
+            # Donde se esperaba un operador, un nombre parecido a 'Mod' es casi seguro
+            # un 'Mod' mal escrito; sin esto el error diría solo que 'sobra' algo.
+            if self.act.tipo == "ID" and normalizar(self.act.valor) == "mod":
+                raise self.error(f"se escribe 'Mod' con mayúscula, no '{self.act.valor}'")
+            return izq
 
     def parse_unario(self):
         if self.es_op("-", "+"):
@@ -630,14 +660,14 @@ class Parser:
 
     def parse_primario(self):
         tok = self.act
-        literales = {"ENTERO": "Entero", "FLOTANTE": "Flotante", "CADENA": "String",
+        literales = {"ENTERO": "Entero", "FLOTANTE": "Real", "CADENA": "String",
                      "CARACTER": "Caracter"}
         if tok.tipo in literales:
             self.avanzar()
             return N.Literal(tok.linea, tok.col, tok.valor, literales[tok.tipo])
         if self.es_kw("Verdadero", "Falso"):
             self.avanzar()
-            return N.Literal(tok.linea, tok.col, tok.valor == "Verdadero", "Booleano")
+            return N.Literal(tok.linea, tok.col, tok.valor == "Verdadero", "Logico")
         if tok.tipo == "ID":
             if self.ver().tipo == "OP" and self.ver().valor == "(":
                 return self.parse_llamada()

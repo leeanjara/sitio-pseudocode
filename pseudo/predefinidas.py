@@ -4,7 +4,7 @@ Para agregar una nueva alcanza con una línea más en la tabla del final: la fir
 (nombre, parámetros y tipo que devuelve) la usa el verificador, y la función de
 Python que va al lado es la que se ejecuta.
 
-Los parámetros se escriben como (nombre, tipo, es_ref). A los parámetros 'ref' la
+Los parámetros se escriben como (nombre, tipo, es_ref). A los parámetros 'Ref' la
 implementación los recibe como una Celda: se les asigna el resultado con `celda.valor = ...`.
 
 Ojo: en este pseudocódigo los caracteres se numeran desde 1, así que las posiciones

@@ -1,0 +1,453 @@
+{
+  "titulo": "Referencia del lenguaje",
+  "bajada": "Todo lo que el verificador acepta, con ejemplos. Los ejemplos están probados: si algo de acá no funciona, es un error del verificador.",
+  "secciones": [
+    {
+      "id": "estructura",
+      "titulo": "Estructura de un programa",
+      "temas": [
+        {
+          "id": "programa",
+          "titulo": "Programa",
+          "cubre": [
+            "Programa"
+          ],
+          "resumen": "La primera línea de todo programa. Le pone nombre y nada más.",
+          "sintaxis": "Programa <nombre>",
+          "ejemplo": "Programa calcular_promedio\nInicio\n    Mostrar(\"Hola\")\nFin",
+          "notas": [
+            "El nombre sigue las reglas de cualquier nombre: letras, números y guion bajo, sin empezar con número y sin tildes ni ñ.",
+            "Va pegado al margen izquierdo, sin sangría."
+          ]
+        },
+        {
+          "id": "var",
+          "titulo": "Var",
+          "cubre": [
+            "Var"
+          ],
+          "resumen": "Abre la sección donde se declaran las variables. Toda variable tiene que declararse antes de usarse.",
+          "sintaxis": "Var\n    <nombre1>, <nombre2> <Tipo>",
+          "ejemplo": "Programa datos\nVar\n    nombre, apellido String\n    edad Entero\n    altura Real\nInicio\n    edad = 20\n    Mostrar(edad)\nFin",
+          "notas": [
+            "Varias variables del mismo tipo van en una línea separadas por comas; el tipo va al final.",
+            "La sección Var del programa va antes de las funciones y procedimientos.",
+            "Cada función o procedimiento puede tener su propio Var, con sus variables internas."
+          ]
+        },
+        {
+          "id": "inicio-fin",
+          "titulo": "Inicio y Fin",
+          "cubre": [
+            "Inicio",
+            "Fin"
+          ],
+          "resumen": "Encierran el cuerpo del programa: las instrucciones que se ejecutan.",
+          "sintaxis": "Inicio\n    <instrucciones>\nFin",
+          "ejemplo": "Programa saludo\nInicio\n    Mostrar(\"Hola\")\n    Mostrar(\"Chau\")\nFin",
+          "notas": [
+            "Las funciones y los procedimientos también usan Inicio y Fin para su cuerpo.",
+            "Fin también cierra bloques, y ahí lleva compañía: Fin Si, Fin Mientras, Fin Para."
+          ]
+        },
+        {
+          "id": "comentarios",
+          "titulo": "Comentarios",
+          "cubre": [],
+          "resumen": "Notas para vos: el verificador las ignora por completo.",
+          "sintaxis": "// lo que quieras escribir",
+          "ejemplo": "Programa ejemplo\nVar\n    total Entero\nInicio\n    total = 0        // acá arranca el acumulador\n    // esta línea entera es un comentario\n    Mostrar(total)\nFin",
+          "notas": [
+            "Un comentario va desde // hasta el final de la línea."
+          ]
+        }
+      ]
+    },
+    {
+      "id": "tipos",
+      "titulo": "Tipos de dato",
+      "temas": [
+        {
+          "id": "entero",
+          "titulo": "Entero",
+          "cubre": [
+            "Entero"
+          ],
+          "resumen": "Números sin parte decimal: 0, 7, -25.",
+          "sintaxis": "<nombre> Entero",
+          "ejemplo": "Programa contar\nVar\n    cantidad Entero\nInicio\n    cantidad = 42\n    Mostrar(cantidad)\nFin",
+          "notas": [
+            "Dividir dos Enteros da un Entero: 7 / 2 da 3, no 3.5."
+          ]
+        },
+        {
+          "id": "real",
+          "titulo": "Real",
+          "cubre": [
+            "Real"
+          ],
+          "resumen": "Números con parte decimal: 1.75, 0.5, -3.0.",
+          "sintaxis": "<nombre> Real",
+          "ejemplo": "Programa reparto\nVar\n    manzanas, invitados Entero\n    por_invitado Real\nInicio\n    manzanas = 7\n    invitados = 2\n    por_invitado = manzanas / invitados          // 3.0: mal, se perdió el medio\n    por_invitado = manzanas * 1.0 / invitados    // 3.5: bien\n    Mostrar(por_invitado)\nFin",
+          "notas": [
+            "Un Entero se puede guardar en un Real: se convierte solo (3 pasa a ser 3.0).",
+            "Al revés no: guardar un Real en un Entero es un error, porque se perdería la parte decimal.",
+            "Ojo con dividir dos Enteros: la cuenta se hace entre enteros y recién después el resultado se guarda en el Real, así que 7 / 2 da 3.0 y no 3.5.",
+            "Para que la división dé decimales, alguno de los dos tiene que ser Real. El truco es multiplicar por 1.0 antes de dividir: manzanas * 1.0 / invitados.",
+            "Se escribe con punto, no con coma: 1.75."
+          ]
+        },
+        {
+          "id": "string",
+          "titulo": "String (o Cadena)",
+          "cubre": [
+            "String",
+            "Cadena"
+          ],
+          "resumen": "Texto, entre comillas dobles. String y Cadena son exactamente el mismo tipo: elegí uno y usalo en todo el programa.",
+          "sintaxis": "<nombre> String\n<nombre> Cadena",
+          "ejemplo": "Programa textos\nVar\n    saludo, nombre, mensaje String\nInicio\n    nombre = \"Ana\"\n    saludo = \"Hola \"\n    mensaje = saludo + nombre\n    Mostrar(mensaje)\nFin",
+          "notas": [
+            "Son el mismo tipo, pero no se pueden mezclar en un mismo programa: si empezaste con String, seguí con String.",
+            "Con + se pegan dos textos, pero no se puede sumar texto con número: para eso usá las comas de Mostrar.",
+            "Los caracteres se numeran desde 1, no desde 0."
+          ]
+        },
+        {
+          "id": "caracter",
+          "titulo": "Caracter",
+          "cubre": [
+            "Caracter"
+          ],
+          "resumen": "Un solo carácter, entre comillas simples.",
+          "sintaxis": "<nombre> Caracter",
+          "ejemplo": "Programa inicial\nVar\n    letra Caracter\nInicio\n    letra = 'A'\n    Mostrar(letra)\nFin",
+          "notas": [
+            "Comillas simples para un carácter ('a'); comillas dobles para texto (\"hola\").",
+            "Un Caracter se puede guardar en un String; al revés no."
+          ]
+        },
+        {
+          "id": "logico",
+          "titulo": "Logico",
+          "cubre": [
+            "Logico",
+            "Verdadero",
+            "Falso"
+          ],
+          "resumen": "Vale Verdadero o Falso, y nada más. Es lo que devuelven las comparaciones.",
+          "sintaxis": "<nombre> Logico",
+          "ejemplo": "Programa mayoria\nVar\n    edad Entero\n    es_mayor Logico\nInicio\n    edad = 20\n    es_mayor = edad >= 18\n    Si(es_mayor)\n        Mostrar(\"Es mayor de edad\")\n    Fin Si\nFin",
+          "notas": [
+            "Verdadero y Falso van con mayúscula inicial, como toda palabra reservada.",
+            "Las condiciones de Si, Mientras y Para tienen que ser Logico."
+          ]
+        }
+      ]
+    },
+    {
+      "id": "entrada-salida",
+      "titulo": "Mostrar y Leer",
+      "temas": [
+        {
+          "id": "mostrar",
+          "titulo": "Mostrar",
+          "cubre": [
+            "Mostrar"
+          ],
+          "resumen": "Escribe en pantalla. Acepta varias cosas separadas por comas y las pega una atrás de otra.",
+          "sintaxis": "Mostrar(<valor1>, <valor2>, ...)",
+          "ejemplo": "Programa mostrar_datos\nVar\n    nombre String\n    edad Entero\n    altura Real\nInicio\n    nombre = \"Ana\"\n    edad = 20\n    altura = 1.65\n    Mostrar(\"Hola \", nombre, \", tenés \", edad, \" años y medís \", altura, \"m\")\nFin",
+          "notas": [
+            "Las comas son la forma de mezclar texto con números. Con + no se puede.",
+            "Cada Mostrar escribe en una línea nueva."
+          ]
+        },
+        {
+          "id": "leer",
+          "titulo": "Leer",
+          "cubre": [
+            "Leer"
+          ],
+          "resumen": "Pide un dato y lo guarda en una variable. El programa se frena hasta que escribas algo.",
+          "sintaxis": "Leer(<variable1>, <variable2>, ...)",
+          "ejemplo": "Programa sumar\nVar\n    a, b Entero\nInicio\n    Mostrar(\"Ingresá dos números\")\n    Leer(a, b)\n    Mostrar(\"La suma es \", a + b)\nFin",
+          "notas": [
+            "Con varias variables pide un dato para cada una, en orden.",
+            "El dato tiene que corresponder al tipo: si la variable es Entero y escribís texto, da error.",
+            "Conviene poner un Mostrar antes, para que quien use el programa sepa qué se le está pidiendo."
+          ]
+        }
+      ]
+    },
+    {
+      "id": "decisiones",
+      "titulo": "Decisiones",
+      "temas": [
+        {
+          "id": "si",
+          "titulo": "Si / Sino / Fin Si",
+          "cubre": [
+            "Si",
+            "Sino"
+          ],
+          "resumen": "Ejecuta un bloque solo si se cumple una condición, y opcionalmente otro si no se cumple.",
+          "sintaxis": "Si(<condición>)\n    <instrucciones>\nSino Si(<condición>)\n    <instrucciones>\nSino\n    <instrucciones>\nFin Si",
+          "ejemplo": "Programa clasificar\nVar\n    nota Entero\nInicio\n    Leer(nota)\n    Si(nota >= 9)\n        Mostrar(\"Excelente\")\n    Sino Si(nota >= 6)\n        Mostrar(\"Aprobado\")\n    Sino\n        Mostrar(\"Desaprobado\")\n    Fin Si\nFin",
+          "notas": [
+            "La condición va siempre entre paréntesis.",
+            "Se pueden encadenar todos los Sino Si que hagan falta; el Sino final es opcional.",
+            "Se cierra con Fin Si, separado y con mayúsculas. FinSi y Fin si están mal.",
+            "Se toma la primera rama que se cumple; las demás no se evalúan."
+          ]
+        }
+      ]
+    },
+    {
+      "id": "repeticiones",
+      "titulo": "Repeticiones",
+      "temas": [
+        {
+          "id": "mientras",
+          "titulo": "Mientras",
+          "cubre": [
+            "Mientras"
+          ],
+          "resumen": "Repite mientras la condición sea verdadera. Revisa antes de entrar, así que puede no ejecutarse ninguna vez.",
+          "sintaxis": "Mientras(<condición>)\n    <instrucciones>\nFin Mientras",
+          "ejemplo": "Programa cuenta_regresiva\nVar\n    i Entero\nInicio\n    i = 5\n    Mientras(i > 0)\n        Mostrar(i)\n        i--\n    Fin Mientras\n    Mostrar(\"¡Despegue!\")\nFin",
+          "notas": [
+            "Algo adentro del bloque tiene que acercar la condición a Falso, o el programa no termina nunca.",
+            "Se usa cuando no sabés de antemano cuántas vueltas van a ser."
+          ]
+        },
+        {
+          "id": "para",
+          "titulo": "Para",
+          "cubre": [
+            "Para"
+          ],
+          "resumen": "Repite una cantidad conocida de veces, llevando la cuenta en una variable.",
+          "sintaxis": "Para (<inicialización>, <incremento>, <condición>)\n    <instrucciones>\nFin Para",
+          "ejemplo": "Programa tabla\nVar\n    i, numero Entero\nInicio\n    numero = 7\n    Para (i = 1, i++, i <= 10)\n        Mostrar(numero, \" x \", i, \" = \", numero * i)\n    Fin Para\nFin",
+          "notas": [
+            "Ojo con el orden: primero la inicialización, después el incremento y al final la condición. No es el orden de C ni de Java.",
+            "El incremento puede ser i++, i--, i += 2 o cualquier acumulador.",
+            "Para contar al revés: Para (i = 10, i--, i > 0).",
+            "La variable del contador se declara en Var, como cualquier otra."
+          ]
+        }
+      ]
+    },
+    {
+      "id": "operadores",
+      "titulo": "Operadores",
+      "temas": [
+        {
+          "id": "aritmeticos",
+          "titulo": "Aritméticos: + - * / % (Mod)",
+          "cubre": [
+            "Mod"
+          ],
+          "resumen": "Suma, resta, multiplicación, división y resto.",
+          "sintaxis": "a + b    a - b    a * b    a / b    a % b    a Mod b",
+          "ejemplo": "Programa aritmetica\nVar\n    entera, resto Entero\n    exacta Real\nInicio\n    entera = 7 / 2          // 3: entre Enteros la división trunca\n    exacta = 7 / 2.0        // 3.5: con un Real da Real\n    resto = 7 Mod 2         // 1, igual que 7 % 2\n    Mostrar(entera, \" \", exacta, \" \", resto)\nFin",
+          "notas": [
+            "% y Mod son exactamente la misma operación; elegí la que te resulte más clara.",
+            "El resto solo funciona entre Enteros.",
+            "Entero / Entero da Entero y trunca hacia cero: 7 / 2 da 3 y -7 / 2 da -3.",
+            "Si alguno de los dos es Real, el resultado es Real. Para dividir dos Enteros con decimales, multiplicá uno por 1.0 primero.",
+            "El + también pega textos, pero solo texto con texto."
+          ]
+        },
+        {
+          "id": "comparacion",
+          "titulo": "Comparación: == != < > <= >=",
+          "cubre": [],
+          "resumen": "Comparan dos valores y dan un Logico.",
+          "sintaxis": "a == b    a != b    a < b    a > b    a <= b    a >= b",
+          "ejemplo": "Programa comparar\nVar\n    edad Entero\nInicio\n    edad = 20\n    Si(edad >= 18 Y edad != 65)\n        Mostrar(\"Mayor de edad y no jubilado\")\n    Fin Si\nFin",
+          "notas": [
+            "Para comparar por igual se usan dos signos: ==. Un solo = es asignar, y el verificador te avisa.",
+            "Distinto se escribe !=, no <>.",
+            "Los textos también se comparan (orden alfabético)."
+          ]
+        },
+        {
+          "id": "logicos",
+          "titulo": "Lógicos: Y, O, !",
+          "cubre": [
+            "Y",
+            "O"
+          ],
+          "resumen": "Combinan condiciones. Y y O van en castellano y con mayúscula; para negar se usa el signo !.",
+          "sintaxis": "<cond1> Y <cond2>\n<cond1> O <cond2>\n!<cond>",
+          "ejemplo": "Programa permisos\nVar\n    edad Entero\n    tiene_permiso Logico\nInicio\n    edad = 16\n    tiene_permiso = Verdadero\n    Si(edad >= 18 O (edad >= 16 Y tiene_permiso))\n        Mostrar(\"Puede entrar\")\n    Fin Si\n    Si(!tiene_permiso)\n        Mostrar(\"Necesita autorización\")\n    Fin Si\nFin",
+          "notas": [
+            "Y da Verdadero si se cumplen las dos condiciones; O, si se cumple al menos una.",
+            "! invierte una condición: !(edad >= 18) es lo mismo que edad < 18.",
+            "Conviene poner entre paréntesis lo que se niega: !(a == b) se lee mejor que !a == b.",
+            "No se usan && ni ||: el verificador los rechaza y te dice cuál corresponde. Tampoco existe 'No': se niega con !."
+          ]
+        },
+        {
+          "id": "contadores",
+          "titulo": "Contadores y acumuladores: ++ -- += -= *= /= %=",
+          "cubre": [],
+          "resumen": "Atajos para cambiar una variable usando su propio valor.",
+          "sintaxis": "i++    i--    total += x    total -= x    total *= x    total /= x    total %= x",
+          "ejemplo": "Programa acumular\nVar\n    i, total Entero\nInicio\n    total = 0\n    Para (i = 1, i++, i <= 5)\n        total += i          // lo mismo que total = total + i\n    Fin Para\n    Mostrar(\"Total: \", total)\nFin",
+          "notas": [
+            "i++ es lo mismo que i = i + 1, y total += x es lo mismo que total = total + x.",
+            "Se pueden usar sueltos como instrucción o dentro del incremento del Para.",
+            "++ y -- solo se aplican a números."
+          ]
+        }
+      ]
+    },
+    {
+      "id": "subprogramas",
+      "titulo": "Funciones y procedimientos",
+      "temas": [
+        {
+          "id": "funcion",
+          "titulo": "Funcion",
+          "cubre": [
+            "Funcion"
+          ],
+          "resumen": "Un bloque con nombre que calcula y devuelve un valor. Se usa dentro de una expresión.",
+          "sintaxis": "Funcion <nombre>(<param> <Tipo>, ...) <TipoQueDevuelve>\nInicio\n    <nombre> = <valor>\nFin",
+          "ejemplo": "Programa area\nVar\n    resultado Real\nFuncion area_rectangulo(base Real, altura Real) Real\nInicio\n    area_rectangulo = base * altura\nFin\nInicio\n    resultado = area_rectangulo(3.0, 4.0)\n    Mostrar(\"El área es \", resultado)\nFin",
+          "notas": [
+            "Para devolver el valor se le asigna al propio nombre de la función. No existe retornar ni return.",
+            "El tipo que devuelve va después del paréntesis de cierre.",
+            "Cada parámetro lleva su propio tipo: (a Entero, b Entero), no (a, b Entero).",
+            "Las funciones van entre la sección Var y el Inicio del programa."
+          ]
+        },
+        {
+          "id": "procedimiento",
+          "titulo": "Procedimiento",
+          "cubre": [
+            "Procedimiento"
+          ],
+          "resumen": "Como una función, pero no devuelve nada. Se usa como una instrucción suelta.",
+          "sintaxis": "Procedimiento <nombre>(<param> <Tipo>, ...)\nInicio\n    <instrucciones>\nFin",
+          "ejemplo": "Programa saludar\nProcedimiento saludar_a(nombre String)\nInicio\n    Mostrar(\"Hola \", nombre, \"!\")\nFin\nInicio\n    saludar_a(\"Ana\")\n    saludar_a(\"Luis\")\nFin",
+          "notas": [
+            "No lleva tipo de retorno y no se le asigna nada a su nombre.",
+            "No se puede usar dentro de una expresión: x = mi_procedimiento(1) es un error.",
+            "Si necesitás que devuelva algo, usá una Funcion o un parámetro Ref."
+          ]
+        },
+        {
+          "id": "ref",
+          "titulo": "Ref",
+          "cubre": [
+            "Ref"
+          ],
+          "resumen": "Marca un parámetro que se pasa por referencia: lo que el subprograma le haga, le queda a la variable de afuera.",
+          "sintaxis": "Procedimiento <nombre>(Ref <param> <Tipo>)",
+          "ejemplo": "Programa convertir\nVar\n    altura Real\nProcedimiento a_metros(Ref centimetros Real)\nInicio\n    centimetros = centimetros / 100\nFin\nInicio\n    altura = 175.0\n    a_metros(altura)\n    Mostrar(altura)        // 1.75: la variable de afuera cambió\nFin",
+          "notas": [
+            "Sin Ref, el subprograma trabaja sobre una copia y la variable de afuera no se entera.",
+            "A un parámetro Ref hay que pasarle una variable, nunca un número ni una cuenta: a_metros(175.0) es un error.",
+            "El tipo tiene que coincidir exacto: a un Ref Real no se le puede pasar un Entero.",
+            "Es la forma de que un procedimiento devuelva resultados."
+          ]
+        }
+      ]
+    },
+    {
+      "id": "predefinidas",
+      "titulo": "Funciones predefinidas",
+      "temas": [
+        {
+          "id": "len",
+          "titulo": "Len",
+          "cubre": [
+            "Len"
+          ],
+          "resumen": "Cuántos caracteres tiene un texto.",
+          "sintaxis": "Len(<texto>) : Entero",
+          "ejemplo": "Programa largo\nVar\n    frase String\n    cantidad Entero\nInicio\n    frase = \"hola mundo\"\n    cantidad = Len(frase)\n    Mostrar(\"Tiene \", cantidad, \" caracteres\")     // 10\nFin",
+          "notas": [
+            "Los espacios también cuentan."
+          ]
+        },
+        {
+          "id": "upper",
+          "titulo": "Upper",
+          "cubre": [
+            "Upper"
+          ],
+          "resumen": "Devuelve el texto en mayúsculas. No cambia el original.",
+          "sintaxis": "Upper(<texto>) : String",
+          "ejemplo": "Programa mayusculas\nVar\n    nombre, grito String\nInicio\n    nombre = \"ana\"\n    grito = Upper(nombre)\n    Mostrar(grito, \" y \", nombre)     // ANA y ana\nFin",
+          "notas": [
+            "Sirve para comparar sin que importen las mayúsculas: Si(Upper(a) == Upper(b))."
+          ]
+        },
+        {
+          "id": "lower",
+          "titulo": "Lower",
+          "cubre": [
+            "Lower"
+          ],
+          "resumen": "Devuelve el texto en minúsculas. No cambia el original.",
+          "sintaxis": "Lower(<texto>) : String",
+          "ejemplo": "Programa minusculas\nVar\n    respuesta String\nInicio\n    respuesta = \"SI\"\n    Si(Lower(respuesta) == \"si\")\n        Mostrar(\"Dijo que sí\")\n    Fin Si\nFin",
+          "notas": []
+        },
+        {
+          "id": "instr",
+          "titulo": "InStr",
+          "cubre": [
+            "InStr"
+          ],
+          "resumen": "Busca un texto adentro de otro. Devuelve cuántas veces aparece y, en la tercera variable, dónde empieza la primera aparición.",
+          "sintaxis": "InStr(<buscar>, <donde>, Ref <posicion>) : Entero",
+          "ejemplo": "Programa buscar\nVar\n    veces, posicion Entero\nInicio\n    veces = InStr(\"la\", \"la casa de la esquina\", posicion)\n    Mostrar(\"Aparece \", veces, \" veces\")           // 2\n    Mostrar(\"La primera empieza en \", posicion)    // 1\nFin",
+          "notas": [
+            "El tercer argumento tiene que ser una variable Entero: ahí se deja la posición.",
+            "Los caracteres se numeran desde 1. Si no aparece, devuelve 0 y deja posicion en 0.",
+            "Distingue mayúsculas de minúsculas: InStr(\"La\", \"la casa\", p) da 0."
+          ]
+        }
+      ]
+    },
+    {
+      "id": "reglas",
+      "titulo": "Reglas de escritura",
+      "temas": [
+        {
+          "id": "mayusculas",
+          "titulo": "Mayúsculas",
+          "cubre": [],
+          "resumen": "Todas las palabras reservadas empiezan con mayúscula, sin excepciones, y no llevan tilde.",
+          "sintaxis": "Si    Mientras    Para    Funcion    Ref    Verdadero",
+          "ejemplo": "Programa mayusculas\nVar\n    x Entero\nInicio\n    x = 1\n    Si(x == 1)             // 'si' en minúscula da error\n        Mostrar(\"uno\")\n    Fin Si                 // 'FinSi' y 'Fin si' también\nFin",
+          "notas": [
+            "Funcion se escribe sin tilde.",
+            "Los bloques se cierran con dos palabras separadas: Fin Si, Fin Mientras, Fin Para.",
+            "Los nombres de tus variables sí pueden ir como quieras, mientras no tengan tildes ni ñ.",
+            "Si te equivocás, el verificador te dice exactamente cómo se escribe."
+          ]
+        },
+        {
+          "id": "sangria",
+          "titulo": "Sangría",
+          "cubre": [],
+          "resumen": "Es obligatoria y tiene que ser pareja. Podés usar 2 espacios, 4, o una tabulación: lo que elijas, pero siempre lo mismo.",
+          "sintaxis": "Si(...)\n    <un nivel más adentro>\nFin Si",
+          "ejemplo": "Programa sangria\nVar\n    i Entero\nInicio\n    Para (i = 1, i++, i <= 3)\n        Si(i == 2)\n            Mostrar(\"dos\")\n        Fin Si\n    Fin Para\nFin",
+          "notas": [
+            "Cada bloque que se abre suma un nivel; el que lo cierra vuelve al nivel de la apertura.",
+            "No se pueden mezclar tabulaciones y espacios en el mismo archivo.",
+            "El editor te ayuda: la tecla Tab copia el estilo que ya tiene tu programa."
+          ]
+        }
+      ]
+    }
+  ]
+}
