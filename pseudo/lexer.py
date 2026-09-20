@@ -1,0 +1,205 @@
+"""Analizador léxico: convierte el texto fuente en una lista de tokens."""
+import unicodedata
+from dataclasses import dataclass
+
+PALABRAS_RESERVADAS = {
+    "Programa", "Var", "Funcion", "Procedimiento", "Inicio", "Fin",
+    "Si", "Sino", "Mientras", "Para", "Hasta", "Repetir", "Que",
+    "Y", "O", "No", "ref", "Verdadero", "Falso", "Mostrar", "Leer",
+}
+# 'Cadena' y 'String' son el mismo tipo; adentro se usa siempre 'String'.
+TIPOS = {"Entero", "Flotante", "String", "Cadena", "Booleano", "Caracter"}
+CANONICO = {"Cadena": "String"}
+
+OPERADORES_DOBLES = {"==", "!=", "<=", ">=", "++", "--", "+=", "-=", "*=", "/=", "%="}
+# Operadores de acumulación: 'total += 1' es lo mismo que 'total = total + 1'.
+COMPUESTOS = {"+=": "+", "-=": "-", "*=": "*", "/=": "/", "%=": "%"}
+OPERADORES_SIMPLES = set("<>=+-*/%(),")
+
+# Símbolos de otros lenguajes: se reportan, pero se reemplazan por su equivalente
+# para que el resto del análisis pueda continuar.
+EQUIVALENTES = {
+    "&&": ("KW", "Y", "usá 'Y' en lugar de '&&'"),
+    "||": ("KW", "O", "usá 'O' en lugar de '||'"),
+    "<>": ("OP", "!=", "usá '!=' en lugar de '<>'"),
+}
+PISTAS_SIMBOLOS = {
+    ";": "no hace falta ';' al final de las líneas",
+    ":": "no se usa ':'; el tipo va después del nombre, separado por un espacio (ej: 'edad Entero')",
+    "{": "los bloques no usan llaves; se cierran con 'Fin', 'Fin Si', 'Fin Mientras', etc.",
+    "}": "los bloques no usan llaves; se cierran con 'Fin', 'Fin Si', 'Fin Mientras', etc.",
+}
+# Palabras de cierre escritas todo junto.
+PALABRAS_JUNTAS = {
+    "finsi": ("Fin", "Si"),
+    "finmientras": ("Fin", "Mientras"),
+    "finpara": ("Fin", "Para"),
+    "sinosi": ("Sino", "Si"),
+    "hastaque": ("Hasta", "Que"),
+}
+# Palabra reservada seguida de otra escrita en minúscula (ej: "Fin si").
+CORRECCIONES_TRAS = {
+    "Fin": {"si": "Si", "mientras": "Mientras", "para": "Para"},
+    "Sino": {"si": "Si"},
+    "Hasta": {"que": "Que"},
+}
+
+
+@dataclass
+class Token:
+    tipo: str       # ID KW TIPO ENTERO FLOTANTE CADENA CARACTER OP NL EOF
+    valor: object
+    linea: int
+    col: int
+
+
+def normalizar(texto):
+    """Minúsculas y sin tildes, para detectar palabras reservadas mal escritas."""
+    descompuesto = unicodedata.normalize("NFD", texto)
+    return "".join(c for c in descompuesto if unicodedata.category(c) != "Mn").lower()
+
+
+def _es_digito(c):
+    return "0" <= c <= "9"
+
+
+def _es_letra_id(c):
+    return c.isalnum() or c == "_"
+
+
+def tokenizar(fuente, diag):
+    tokens = []
+    i, n = 0, len(fuente)
+    linea, inicio_linea = 1, 0
+
+    def agregar(tipo, valor, col):
+        tokens.append(Token(tipo, valor, linea, col))
+
+    while i < n:
+        c = fuente[i]
+        col = i - inicio_linea + 1
+
+        if c == "\n":
+            agregar("NL", "\n", col)
+            i += 1
+            linea += 1
+            inicio_linea = i
+            continue
+        if c in " \t\r﻿":
+            i += 1
+            continue
+        if fuente.startswith("//", i):
+            while i < n and fuente[i] != "\n":
+                i += 1
+            continue
+
+        if _es_digito(c):
+            j = i
+            while j < n and _es_digito(fuente[j]):
+                j += 1
+            if j + 1 < n and fuente[j] == "." and _es_digito(fuente[j + 1]):
+                j += 1
+                while j < n and _es_digito(fuente[j]):
+                    j += 1
+                agregar("FLOTANTE", float(fuente[i:j]), col)
+            else:
+                agregar("ENTERO", int(fuente[i:j]), col)
+            if j < n and (fuente[j].isalpha() or fuente[j] == "_"):
+                k = j
+                while k < n and _es_letra_id(fuente[k]):
+                    k += 1
+                diag.error(f"'{fuente[i:k]}' no es un nombre válido: los nombres no pueden "
+                           "empezar con un número", linea, col)
+                tokens.pop()
+                agregar("ID", fuente[i:k], col)
+                j = k
+            i = j
+            continue
+
+        if c.isalpha() or c == "_":
+            j = i
+            while j < n and _es_letra_id(fuente[j]):
+                j += 1
+            palabra = fuente[i:j]
+            junta = PALABRAS_JUNTAS.get(normalizar(palabra))
+            if junta:
+                diag.error(f"'{palabra}' se escribe separado: '{junta[0]} {junta[1]}'", linea, col)
+                agregar("KW", junta[0], col)
+                agregar("KW", junta[1], col + len(junta[0]))
+            elif palabra in PALABRAS_RESERVADAS:
+                agregar("KW", palabra, col)
+            elif palabra in TIPOS:
+                agregar("TIPO", palabra, col)
+            else:
+                agregar("ID", palabra, col)
+            i = j
+            continue
+
+        if c == '"':
+            j = i + 1
+            while j < n and fuente[j] not in '"\n':
+                j += 1
+            agregar("CADENA", fuente[i + 1:j], col)
+            if j < n and fuente[j] == '"':
+                i = j + 1
+            else:
+                diag.error('texto sin cerrar: falta la comilla " del final', linea, col)
+                i = j
+            continue
+
+        if c == "'":
+            j = i + 1
+            while j < n and fuente[j] not in "'\n":
+                j += 1
+            contenido = fuente[i + 1:j]
+            if j < n and fuente[j] == "'":
+                i = j + 1
+            else:
+                diag.error("caracter sin cerrar: falta la comilla ' del final", linea, col)
+                i = j
+            if len(contenido) == 1:
+                agregar("CARACTER", contenido, col)
+            else:
+                diag.error("entre comillas simples va un solo caracter; para textos usá "
+                           'comillas dobles ("...")', linea, col)
+                agregar("CADENA", contenido, col)
+            continue
+
+        dos = fuente[i:i + 2]
+        if dos in EQUIVALENTES:
+            tipo, valor, pista = EQUIVALENTES[dos]
+            diag.error(pista, linea, col)
+            agregar(tipo, valor, col)
+            i += 2
+            continue
+        if dos in OPERADORES_DOBLES:
+            agregar("OP", dos, col)
+            i += 2
+            continue
+        if c == "!":
+            diag.error("usá 'No' en lugar de '!'", linea, col)
+            agregar("KW", "No", col)
+            i += 1
+            continue
+        if c in OPERADORES_SIMPLES:
+            agregar("OP", c, col)
+            i += 1
+            continue
+
+        pista = PISTAS_SIMBOLOS.get(c)
+        diag.error(f"símbolo no válido '{c}'" + (f": {pista}" if pista else ""), linea, col)
+        i += 1
+
+    col = i - inicio_linea + 1
+    if not tokens or tokens[-1].tipo != "NL":
+        agregar("NL", "\n", col)
+    agregar("EOF", None, col)
+
+    for a, b in zip(tokens, tokens[1:]):
+        if a.tipo == "KW" and b.tipo == "ID" and a.linea == b.linea:
+            correcto = CORRECCIONES_TRAS.get(a.valor, {}).get(normalizar(b.valor))
+            if correcto:
+                diag.error(f"se escribe '{a.valor} {correcto}' (con mayúscula)", b.linea, b.col)
+                b.tipo, b.valor = "KW", correcto
+
+    return tokens

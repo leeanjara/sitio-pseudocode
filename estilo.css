@@ -1,0 +1,337 @@
+:root {
+  --fondo: #f6f7f9;
+  --papel: #ffffff;
+  --borde: #dcdfe4;
+  --texto: #1c1f24;
+  --suave: #6b7280;
+  --acento: #2563eb;
+  --error: #d02f2f;
+  --aviso: #b26a00;
+  --bien: #1a7f4b;
+  --consola-fondo: #1e222a;
+  --consola-texto: #e6e8ec;
+  --mono: ui-monospace, "Cascadia Code", "Consolas", "SF Mono", monospace;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --fondo: #14171c;
+    --papel: #1b1f26;
+    --borde: #2e343d;
+    --texto: #e6e8ec;
+    --suave: #9aa3b0;
+    --acento: #6ea8fe;
+    --error: #ff7b72;
+    --aviso: #e3b341;
+    --bien: #56d364;
+    --consola-fondo: #0f1216;
+  }
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  background: var(--fondo);
+  color: var(--texto);
+  font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+
+/* ------------------------------------------------------------- barra */
+
+.barra {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 10px 16px;
+  background: var(--papel);
+  border-bottom: 1px solid var(--borde);
+}
+
+.barra h1 {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+.acciones { display: flex; gap: 8px; }
+
+button {
+  font: inherit;
+  font-size: 14px;
+  font-weight: 500;
+  padding: 7px 16px;
+  border-radius: 7px;
+  border: 1px solid transparent;
+  background: var(--acento);
+  color: #fff;
+  cursor: pointer;
+}
+button:hover:not(:disabled) { filter: brightness(1.08); }
+button:disabled { opacity: 0.45; cursor: default; }
+
+button.secundario {
+  background: transparent;
+  color: var(--texto);
+  border-color: var(--borde);
+}
+
+button.enlace {
+  background: none;
+  border: none;
+  color: var(--suave);
+  padding: 2px 4px;
+  font-size: 13px;
+}
+button.enlace:hover { color: var(--acento); }
+
+.estado {
+  margin: 0 0 0 auto;
+  font-size: 13px;
+  color: var(--suave);
+}
+.estado.bien { color: var(--bien); }
+.estado.mal { color: var(--error); }
+.estado.espera { color: var(--acento); font-weight: 600; }
+
+/* ---------------------------------------------------------- tablero */
+
+.tablero {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1px;
+  background: var(--borde);
+}
+
+.panel {
+  min-height: 0;
+  /* Sin esto, un programa con líneas largas ensancha la columna y termina
+     desplazando toda la página para el costado (los ítems de grid no se achican
+     por debajo de su contenido salvo que se les diga). */
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  background: var(--papel);
+}
+
+.titulo-panel {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 14px;
+  border-bottom: 1px solid var(--borde);
+}
+
+.titulo-panel h2 {
+  margin: 0;
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--suave);
+}
+
+.titulo-panel .enlace { margin-left: auto; }
+
+.resumen { margin-left: auto; font-size: 13px; color: var(--suave); }
+.resumen.bien { color: var(--bien); }
+.resumen.aviso { color: var(--aviso); }
+.resumen.mal { color: var(--error); }
+
+/* ----------------------------------------------------------- editor */
+
+#editor { flex: 1; min-height: 0; overflow: hidden; }
+
+.CodeMirror {
+  height: 100%;
+  font-family: var(--mono);
+  font-size: 14.5px;
+  line-height: 1.6;
+  background: var(--papel);
+  color: var(--texto);
+}
+
+.CodeMirror-gutters { background: var(--papel); border-right: 1px solid var(--borde); }
+.CodeMirror-linenumber { color: var(--suave); opacity: 0.6; }
+.CodeMirror-cursor { border-left-color: var(--texto); }
+.CodeMirror-selected { background: rgba(110, 168, 254, 0.22) !important; }
+
+/* Van con '.CodeMirror' adelante para ganarle al tema que trae la librería. */
+.CodeMirror .cm-keyword  { color: #a626a4; font-weight: 600; }
+.CodeMirror .cm-type     { color: #0a7ea4; font-weight: 600; }
+.CodeMirror .cm-builtin  { color: #b26a00; }
+.CodeMirror .cm-string   { color: #2a8a3e; }
+.CodeMirror .cm-number   { color: #b3541e; }
+.CodeMirror .cm-comment  { color: var(--suave); font-style: italic; }
+.CodeMirror .cm-operator { color: var(--suave); }
+.CodeMirror .cm-variable { color: var(--texto); }
+
+@media (prefers-color-scheme: dark) {
+  .CodeMirror .cm-keyword { color: #d2a8ff; }
+  .CodeMirror .cm-type    { color: #79c0ff; }
+  .CodeMirror .cm-builtin { color: #ffa657; }
+  .CodeMirror .cm-string  { color: #7ee787; }
+  .CodeMirror .cm-number  { color: #ffab70; }
+}
+
+/* Las tabulaciones se dibujan igual que los espacios, así que una mezcla accidental es
+   invisible justo cuando hay que verla. Esta flechita tenue las delata. */
+.CodeMirror .cm-tab {
+  background-image: url("data:image/svg+xml;charset=utf8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='10'%3E%3Cpath d='M1 5h6M5 3l2 2-2 2' fill='none' stroke='%23888' stroke-width='1'/%3E%3C/svg%3E");
+  background-position: left center;
+  background-repeat: no-repeat;
+}
+
+.subrayado-error {
+  text-decoration: underline wavy var(--error);
+  text-underline-offset: 3px;
+}
+.subrayado-advertencia {
+  text-decoration: underline wavy var(--aviso);
+  text-underline-offset: 3px;
+}
+
+.marca {
+  display: block;
+  width: 7px;
+  height: 7px;
+  margin: 8px auto 0;
+  border-radius: 50%;
+}
+.marca-error { background: var(--error); }
+.marca-advertencia { background: var(--aviso); }
+
+/* ---------------------------------------------------- diagnósticos */
+
+.diagnosticos {
+  flex-shrink: 0;
+  max-height: 35%;
+  overflow-y: auto;
+  border-top: 1px solid var(--borde);
+}
+
+.diagnostico {
+  display: flex;
+  gap: 10px;
+  width: 100%;
+  text-align: left;
+  padding: 7px 14px;
+  background: none;
+  border: none;
+  border-bottom: 1px solid var(--borde);
+  border-radius: 0;
+  color: var(--texto);
+  font-size: 13.5px;
+  font-weight: 400;
+  line-height: 1.45;
+}
+.diagnostico:hover { background: rgba(127, 127, 127, 0.09); }
+.diagnostico .texto { min-width: 0; overflow-wrap: anywhere; }
+.diagnostico .donde {
+  flex-shrink: 0;
+  font-family: var(--mono);
+  font-size: 12px;
+  padding-top: 1px;
+  color: var(--suave);
+}
+.diagnostico.error .donde { color: var(--error); }
+.diagnostico.advertencia .donde { color: var(--aviso); }
+
+/* --------------------------------------------------------- consola */
+
+.consola {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 12px 14px;
+  background: var(--consola-fondo);
+  color: var(--consola-texto);
+  font-family: var(--mono);
+  font-size: 14px;
+  line-height: 1.65;
+}
+
+.consola .vacio {
+  margin: 0;
+  color: #8b93a1;
+  font-family: system-ui, sans-serif;
+  font-size: 13.5px;
+  line-height: 1.6;
+}
+.consola .vacio code {
+  background: rgba(255, 255, 255, 0.1);
+  padding: 1px 5px;
+  border-radius: 4px;
+}
+
+.linea { white-space: pre-wrap; word-break: break-word; }
+.linea.error { color: #ff7b72; }
+.linea.aviso { color: #e3b341; }
+.linea.fin { color: #56d364; }
+.linea.eco { color: #7ee787; }
+
+.linea.entrada { display: flex; align-items: center; gap: 8px; }
+.linea.entrada .flecha { color: #56d364; font-weight: 700; }
+.linea.entrada input {
+  flex: 1;
+  font: inherit;
+  color: var(--consola-texto);
+  background: none;
+  border: none;
+  border-bottom: 1px solid #56d364;
+  padding: 1px 2px;
+  outline: none;
+}
+
+/* Visible para lectores de pantalla, invisible en la página. */
+.oculto {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+/* Modo alternativo, cuando el navegador no permite frenar el programa. */
+.precarga {
+  flex-shrink: 0;
+  padding: 10px 14px;
+  border-top: 1px solid var(--borde);
+}
+.precarga label {
+  display: block;
+  font-size: 12px;
+  font-weight: 600;
+  margin-bottom: 6px;
+}
+.precarga label span { font-weight: 400; color: var(--suave); }
+.precarga textarea {
+  width: 100%;
+  font-family: var(--mono);
+  font-size: 13.5px;
+  padding: 8px;
+  border: 1px solid var(--borde);
+  border-radius: 6px;
+  background: var(--fondo);
+  color: var(--texto);
+  resize: vertical;
+}
+
+/* ------------------------------------------------------- angosto */
+
+@media (max-width: 860px) {
+  body { height: auto; min-height: 100vh; }
+  .tablero { grid-template-columns: 1fr; }
+  .panel-editor { min-height: 62vh; }
+  .panel-consola { min-height: 38vh; }
+  .barra { flex-wrap: wrap; }
+  .estado { width: 100%; margin-left: 0; }
+}

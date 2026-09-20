@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Pseudocódigo</title>
+<script src="coi.js"></script>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.css"
+      crossorigin="anonymous">
+<link rel="stylesheet" href="estilo.css">
+</head>
+<body>
+
+<header class="barra">
+  <h1>Pseudocódigo</h1>
+  <div class="acciones">
+    <button id="btn-ejecutar" disabled>Ejecutar</button>
+    <button id="btn-detener" class="secundario" hidden>Detener</button>
+  </div>
+  <p id="estado" class="estado">Cargando…</p>
+</header>
+
+<main class="tablero">
+
+  <section class="panel panel-editor">
+    <div class="titulo-panel">
+      <h2>Tu programa</h2>
+      <span id="resumen" class="resumen"></span>
+    </div>
+    <div id="editor"></div>
+    <div id="diagnosticos" class="diagnosticos" hidden></div>
+  </section>
+
+  <section class="panel panel-consola">
+    <div class="titulo-panel">
+      <h2>Resultado</h2>
+      <button id="btn-limpiar" class="enlace">Limpiar</button>
+    </div>
+    <div id="consola" class="consola" tabindex="0">
+      <p class="vacio">Acá vas a ver lo que muestra tu programa, y acá mismo vas a
+         escribir cuando el programa te pida datos con <code>Leer</code>.</p>
+    </div>
+    <div id="precarga" class="precarga" hidden>
+      <label for="datos">Datos de entrada <span>(uno por línea, uno por cada <code>Leer</code>)</span></label>
+      <textarea id="datos" rows="4" spellcheck="false"></textarea>
+    </div>
+  </section>
+
+</main>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.js"
+        crossorigin="anonymous"></script>
+<script src="app.js"></script>
+</body>
+</html>
