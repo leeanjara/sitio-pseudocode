@@ -84,6 +84,9 @@ def empaquetar(destino="sitio"):
                     ignore=shutil.ignore_patterns("__pycache__", "*.pyc"))
     (salida / "pseudo" / MANIFIESTO).write_text(json.dumps(listar_modulos()), encoding="utf-8")
     (salida / "_headers").write_text(ENCABEZADOS, encoding="utf-8")
+    # Sin esto, GitHub Pages pasa el sitio por Jekyll, que no publica los archivos que
+    # empiezan con guion bajo: __init__.py y __main__.py darían 404 y la página no carga.
+    (salida / ".nojekyll").write_text("", encoding="utf-8")
 
     print(f"Sitio armado en {salida}")
     print("Subí el contenido de esa carpeta a GitHub Pages, Netlify o Cloudflare Pages.")

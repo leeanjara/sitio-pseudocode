@@ -54,7 +54,16 @@ async function cargar() {
   const fuentes = await Promise.all(modulos.map(async (m) => {
     const url = new URL(`${base}pseudo/${m}.py`, self.location.href);
     const r = await fetch(url, { cache: "no-store" });
-    if (!r.ok) throw new Error(`No se pudo leer pseudo/${m}.py (${r.status})`);
+    if (!r.ok) {
+      // Los módulos con guion bajo son los primeros en fallar en GitHub Pages: Jekyll
+      // no los publica. Vale la pena decirlo acá en vez de dejar un 404 a secas.
+      const pista = m.startsWith("_")
+        ? " Si está publicado en GitHub Pages, falta el archivo .nojekyll en la raíz del" +
+          " sitio: sin él no se publican los archivos que empiezan con guion bajo." +
+          " Volvé a armarlo con 'python -m pseudo --empaquetar' y subilo de nuevo."
+        : "";
+      throw new Error(`No se pudo leer pseudo/${m}.py (${r.status}).${pista}`);
+    }
     return [m, await r.text()];
   }));
 
