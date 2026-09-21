@@ -39,6 +39,9 @@ let marcas = [];
 let contadorAnalisis = 0;
 let temporizador = null;
 let detenidoPorUsuario = false;
+let avisosDesplegados = (() => {
+  try { return localStorage.getItem("pseudo:advertencias") === "1"; } catch (_) { return false; }
+})();
 
 let memoria = null, control = null, bytes = null;
 if (INTERACTIVO) {
@@ -196,25 +199,52 @@ function irA(d) {
   editor.focus();
 }
 
+function crearFila(d) {
+  const fila = document.createElement("button");
+  fila.className = `diagnostico ${d.nivel}`;
+  const donde = document.createElement("span");
+  donde.className = "donde";
+  donde.textContent = `${d.linea}:${d.col}`;
+  const texto = document.createElement("span");
+  texto.className = "texto";
+  texto.textContent = d.mensaje;
+  fila.append(donde, texto);
+  fila.addEventListener("click", () => irA(d));
+  return fila;
+}
+
 function mostrarDiagnosticos(informe) {
   limpiarMarcas();
   elDiagnosticos.innerHTML = "";
   const lista = informe.diagnosticos || [];
   elDiagnosticos.hidden = lista.length === 0;
 
+  // Las marcas en el código se ponen siempre, para errores y advertencias por igual:
+  // ahí no estorban, porque están al lado de la línea de la que hablan.
+  for (const d of lista) subrayar(d);
+
+  // Las advertencias hablan del programa terminado ("esta variable no se usa"), así que
+  // mientras se escribe son casi todas falsas alarmas: se pliegan detrás de una línea.
+  // Va primera y pegada al borde de arriba, para que no haya que bajar entre los errores
+  // para encontrarla.
+  const avisos = lista.filter((d) => d.nivel === "advertencia");
+  if (avisos.length) {
+    const cuantas = `${avisos.length} ${avisos.length === 1 ? "advertencia" : "advertencias"}`;
+    const control = document.createElement("button");
+    control.className = "diagnostico plegado";
+    control.textContent = `${cuantas}. ${avisosDesplegados ? "Ocultar" : "Mostrar"}`;
+    control.addEventListener("click", () => {
+      avisosDesplegados = !avisosDesplegados;
+      try {
+        localStorage.setItem("pseudo:advertencias", avisosDesplegados ? "1" : "0");
+      } catch (_) { /* sin memoria, vale para esta sesión igual */ }
+      mostrarDiagnosticos(informe);
+    });
+    elDiagnosticos.appendChild(control);
+  }
+
   for (const d of lista) {
-    subrayar(d);
-    const fila = document.createElement("button");
-    fila.className = `diagnostico ${d.nivel}`;
-    const donde = document.createElement("span");
-    donde.className = "donde";
-    donde.textContent = `${d.linea}:${d.col}`;
-    const texto = document.createElement("span");
-    texto.className = "texto";
-    texto.textContent = d.mensaje;
-    fila.append(donde, texto);
-    fila.addEventListener("click", () => irA(d));
-    elDiagnosticos.appendChild(fila);
+    if (d.nivel === "error" || avisosDesplegados) elDiagnosticos.appendChild(crearFila(d));
   }
 
   const errores = informe.errores || 0;

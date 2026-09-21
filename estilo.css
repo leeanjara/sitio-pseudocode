@@ -221,7 +221,11 @@ button.enlace:hover { color: var(--acento); }
 
 .diagnosticos {
   flex-shrink: 0;
-  max-height: 35%;
+  /* Un piso y un techo chicos: con 35% la lista llegaba a comerse un tercio de la
+     pantalla, y al crecer y achicarse con cada tecla movía el código bajo el cursor.
+     Con el piso, pasar de uno a dos renglones ya no mueve nada. */
+  min-height: 66px;
+  max-height: min(30vh, 170px);
   overflow-y: auto;
   border-top: 1px solid var(--borde);
 }
@@ -243,6 +247,21 @@ button.enlace:hover { color: var(--acento); }
 }
 .diagnostico:hover { background: rgba(127, 127, 127, 0.09); }
 .diagnostico .texto { min-width: 0; overflow-wrap: anywhere; }
+
+/* La línea que pliega las advertencias: se lee como un control, no como un problema más.
+   Queda pegada al borde de arriba mientras la lista se desplaza, así con muchos errores
+   sigue estando a mano en vez de quedar enterrada al final. */
+.diagnostico.plegado {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  color: var(--suave);
+  font-size: 13px;
+  font-weight: 500;
+  /* Opaco a propósito: las filas pasan por debajo al desplazarse. */
+  background: var(--papel);
+}
+.diagnostico.plegado:hover { color: var(--aviso); background: var(--papel); }
 .diagnostico .donde {
   flex-shrink: 0;
   font-family: var(--mono);
