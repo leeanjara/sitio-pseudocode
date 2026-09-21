@@ -1,5 +1,5 @@
 """Nodos del árbol sintáctico que produce el parser."""
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 
 @dataclass
@@ -35,6 +35,17 @@ class Binaria(Nodo):
 
 
 @dataclass
+class Indice(Nodo):
+    """Acceso por posición: base[indice].
+
+    Hoy la base solo puede ser texto, pero el nodo no lo sabe: cuando existan los
+    arreglos sirve igual, y 'base' puede ser a su vez otro Indice.
+    """
+    base: Nodo
+    indice: Nodo
+
+
+@dataclass
 class Unaria(Nodo):
     op: str
     operando: Nodo
@@ -46,6 +57,9 @@ class Unaria(Nodo):
 class Asignacion(Nodo):
     nombre: str
     expr: Nodo
+    # Posiciones entre corchetes del destino: vacío en 'x = 1', un elemento en
+    # 'texto[3] = ...'. Es una lista para que 'arreglo[i][j]' entre sin cambiar el nodo.
+    indices: list = field(default_factory=list)
 
 
 @dataclass

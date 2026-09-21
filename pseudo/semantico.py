@@ -11,6 +11,9 @@ RESERVADAS_POR_FORMA = {normalizar(p): p for p in PALABRAS_RESERVADAS | TIPOS}
 
 NUMERICOS = {"Entero", "Real"}
 TEXTO = {"String", "Caracter"}
+# Qué se puede indexar con [ ] y qué tipo sale de adentro. Hoy solo el texto; cuando
+# existan los arreglos se agregan acá y ni el parser ni el intérprete cambian.
+ELEMENTO_DE = {"String": "Caracter"}
 COMPARADORES = {"==", "!=", "<", ">", "<=", ">="}
 SUBPROGRAMAS = ("funcion", "procedimiento")
 
@@ -228,7 +231,10 @@ class Analizador:
                                      f"el valor que devuelve '{nombre}'")
             return
 
-        simbolo = self.resolver_variable(nombre, s, escritura=True)
+        # Cambiar una posición no es darle su primer valor a la variable: el texto ya tiene
+        # que existir. Por eso cuenta como lectura, y así se conserva el aviso de "se usa
+        # pero nunca recibe un valor" para quien escriba t[1] = 'a' sin haber armado t.
+        simbolo = self.resolver_variable(nombre, s, escritura=not s.indices)
         tipo = self.tipo(s.expr)
         if simbolo is None:
             return
@@ -241,7 +247,25 @@ class Analizador:
             self.diag.error(f"no se puede asignar a '{nombre}' porque es un procedimiento",
                             s.linea, s.col)
             return
+        if s.indices:
+            self.asignacion_por_posicion(s, simbolo, tipo)
+            return
         self.verificar_asignable(simbolo.tipo, tipo, s.expr, f"la variable '{nombre}'")
+
+    def asignacion_por_posicion(self, s, simbolo, tipo_del_valor):
+        """'texto[3] = 'S'': cambia una posición, no la variable entera."""
+        contenedor = simbolo.tipo
+        for indice in s.indices:
+            self.verificar_posicion(indice, s)
+            if contenedor is None:
+                return
+            if contenedor not in ELEMENTO_DE:
+                self.diag.error(f"no se puede usar [ ] sobre un {contenedor}: por ahora solo "
+                                "el texto tiene posiciones", s.linea, s.col)
+                return
+            contenedor = ELEMENTO_DE[contenedor]
+        self.verificar_asignable(contenedor, tipo_del_valor, s.expr,
+                                 f"la posición de '{s.nombre}'")
 
     def para(self, s):
         if s.inicializacion is not None:
@@ -291,7 +315,27 @@ class Analizador:
             return self.tipo_unaria(e)
         if isinstance(e, N.Binaria):
             return self.tipo_binaria(e)
+        if isinstance(e, N.Indice):
+            return self.tipo_indice(e)
         return None
+
+    def tipo_indice(self, e):
+        """Tipo de 'base[i]'. Devuelve el tipo del elemento, o None si no se puede."""
+        base = self.tipo(e.base)
+        self.verificar_posicion(e.indice, e)
+        if base is None:
+            return None
+        if base not in ELEMENTO_DE:
+            self.diag.error(f"no se puede usar [ ] sobre un {base}: por ahora solo el texto "
+                            "tiene posiciones", e.linea, e.col)
+            return None
+        return ELEMENTO_DE[base]
+
+    def verificar_posicion(self, expr, nodo):
+        tipo = self.tipo(expr)
+        if tipo not in (None, "Entero"):
+            self.diag.error(f"la posición entre corchetes tiene que ser un Entero, no un "
+                            f"{tipo}", nodo.linea, nodo.col)
 
     def tipo_variable(self, e):
         simbolo = self.resolver_variable(e.nombre, e, escritura=False)

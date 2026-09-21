@@ -110,7 +110,23 @@
           "notas": [
             "Son el mismo tipo, pero no se pueden mezclar en un mismo programa: si empezaste con String, seguí con String.",
             "Con + se pegan dos textos, pero no se puede sumar texto con número: para eso usá las comas de Mostrar.",
-            "Los caracteres se numeran desde 1, no desde 0."
+            "Para llegar a un carácter suelto se usan corchetes; está explicado en 'Posiciones de un texto'."
+          ]
+        },
+        {
+          "id": "posiciones",
+          "titulo": "Posiciones de un texto: texto[i]",
+          "cubre": [],
+          "resumen": "Entre corchetes se llega a un carácter suelto del texto, para leerlo o para cambiarlo. Se numeran desde 1.",
+          "sintaxis": "<texto>[<posicion>]\n<texto>[<posicion>] = <caracter>",
+          "ejemplo": "Programa iniciales\nVar\n    nombre String\n    inicial Caracter\n    i Entero\nInicio\n    nombre = \"ana\"\n    inicial = nombre[1]        // 'a': la primera, no la 0\n    nombre[1] = 'A'            // ahora nombre vale \"Ana\"\n    Mostrar(inicial, \" -> \", nombre)\n\n    Para (i = 1, i++, i <= Len(nombre))\n        Mostrar(nombre[i])\n    Fin Para\nFin",
+          "notas": [
+            "La primera posición es la 1 y la última es Len(texto). No hay posición 0.",
+            "Lo que sale de una posición es un Caracter, no un String: por eso se asigna con comillas simples ('A') y no dobles.",
+            "La posición puede ser cualquier expresión Entera: texto[i], texto[i + 1], texto[Len(texto)].",
+            "Pedir una posición que no existe corta el programa y avisa cuántos caracteres tenía el texto.",
+            "Cambiar una posición no sirve para darle su primer valor a la variable: el texto ya tiene que existir.",
+            "Por ahora solo el texto tiene posiciones; los arreglos todavía no están definidos en la materia."
           ]
         },
         {
@@ -124,7 +140,8 @@
           "ejemplo": "Programa inicial\nVar\n    letra Caracter\nInicio\n    letra = 'A'\n    Mostrar(letra)\nFin",
           "notas": [
             "Comillas simples para un carácter ('a'); comillas dobles para texto (\"hola\").",
-            "Un Caracter se puede guardar en un String; al revés no."
+            "Un Caracter se puede guardar en un String; al revés no.",
+            "Sacar una posición de un texto da un Caracter: inicial = nombre[1]."
           ]
         },
         {

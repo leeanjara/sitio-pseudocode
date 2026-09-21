@@ -384,7 +384,8 @@ class Parser:
         if tok.tipo == "ID":
             sig = self.ver()
             clave = normalizar(tok.valor)
-            if sig.tipo == "OP" and (sig.valor in ("=", "++", "--") or sig.valor in COMPUESTOS):
+            if sig.tipo == "OP" and (sig.valor in ("=", "++", "--", "[")
+                                     or sig.valor in COMPUESTOS):
                 asignacion = self.parse_incremento()
                 self.fin_linea()
                 return asignacion
@@ -509,6 +510,23 @@ class Parser:
         sig = self.ver()
         if tok.tipo != "ID" or sig.tipo != "OP":
             return None
+
+        # Destino con posición: 'mi_texto[3] = 'S''. Los corchetes se guardan aparte del
+        # nombre para que el día que haya arreglos el destino ya esté representado.
+        if sig.valor == "[":
+            self.avanzar()
+            indices = []
+            while self.es_op("["):
+                corchete = self.avanzar()
+                indices.append(self.parse_expr())
+                self.esperar_op("]", f"']' para cerrar el '[' de la columna {corchete.col}")
+            if self.act.tipo == "OP" and (self.act.valor in ("++", "--")
+                                          or self.act.valor in COMPUESTOS):
+                raise self.error(f"'{self.act.valor}' no se puede usar sobre una posición; "
+                                 f"escribilo con '=' (ej: {tok.valor}[1] = 'a')")
+            self.esperar_op("=", "'=' para darle un valor a esa posición")
+            return N.Asignacion(tok.linea, tok.col, tok.valor, self.parse_expr(), indices)
+
         variable = N.Variable(tok.linea, tok.col, tok.valor)
 
         if sig.valor in ("++", "--"):
@@ -664,18 +682,32 @@ class Parser:
                      "CARACTER": "Caracter"}
         if tok.tipo in literales:
             self.avanzar()
-            return N.Literal(tok.linea, tok.col, tok.valor, literales[tok.tipo])
+            return self.parse_indices(N.Literal(tok.linea, tok.col, tok.valor,
+                                                literales[tok.tipo]))
         if self.es_kw("Verdadero", "Falso"):
             self.avanzar()
             return N.Literal(tok.linea, tok.col, tok.valor == "Verdadero", "Logico")
         if tok.tipo == "ID":
             if self.ver().tipo == "OP" and self.ver().valor == "(":
-                return self.parse_llamada()
+                return self.parse_indices(self.parse_llamada())
             self.avanzar()
-            return N.Variable(tok.linea, tok.col, tok.valor)
+            return self.parse_indices(N.Variable(tok.linea, tok.col, tok.valor))
         if self.es_op("("):
             self.avanzar()
             expr = self.parse_expr()
             self.esperar_op(")", f"')' para cerrar el '(' de la columna {tok.col}")
-            return expr
+            return self.parse_indices(expr)
         raise self.error_esperado("un valor o una expresión")
+
+    def parse_indices(self, base):
+        """Los '[...]' que vengan pegados: base[i], y más adelante base[i][j].
+
+        Se encadenan acá y no en cada lugar donde aparece un nombre, para que agregar
+        arreglos no obligue a tocar el resto del parser.
+        """
+        while self.es_op("["):
+            corchete = self.avanzar()
+            indice = self.parse_expr()
+            self.esperar_op("]", f"']' para cerrar el '[' de la columna {corchete.col}")
+            base = N.Indice(corchete.linea, corchete.col, base, indice)
+        return base

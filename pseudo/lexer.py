@@ -14,7 +14,7 @@ CANONICO = {"Cadena": "String"}
 OPERADORES_DOBLES = {"==", "!=", "<=", ">=", "++", "--", "+=", "-=", "*=", "/=", "%="}
 # Operadores de acumulación: 'total += 1' es lo mismo que 'total = total + 1'.
 COMPUESTOS = {"+=": "+", "-=": "-", "*=": "*", "/=": "/", "%=": "%"}
-OPERADORES_SIMPLES = set("<>=+-*/%(),!")
+OPERADORES_SIMPLES = set("<>=+-*/%(),![]")
 
 # Símbolos de otros lenguajes: se reportan, pero se reemplazan por su equivalente
 # para que el resto del análisis pueda continuar.

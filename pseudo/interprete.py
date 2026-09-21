@@ -87,7 +87,11 @@ class Interprete:
         self.contar_paso(s)
         if isinstance(s, N.Asignacion):
             celda = self.celda(s.nombre, marco)
-            celda.valor = convertir(celda.tipo, self.evaluar(s.expr, marco))
+            valor = self.evaluar(s.expr, marco)
+            if s.indices:
+                celda.valor = self.cambiar_posicion(celda.valor, s.indices, valor, marco, s)
+            else:
+                celda.valor = convertir(celda.tipo, valor)
         elif isinstance(s, N.LlamadaProc):
             self.llamar(s.llamada, marco)
         elif isinstance(s, N.Mostrar):
@@ -116,6 +120,34 @@ class Interprete:
             self.contar_paso(s)
             self.bloque(s.cuerpo, marco)
             self.sentencia(s.incremento, marco)
+
+    # ------------------------------------------------------------- posiciones
+
+    def posicion(self, contenedor, expr, marco, nodo):
+        """Traduce la posición del pseudocódigo (desde 1) a la de Python (desde 0)."""
+        i = self.evaluar(expr, marco)
+        if not 1 <= i <= len(contenedor):
+            cuantos = len(contenedor)
+            raise ErrorEjecucion(f"la posición {i} no existe: hay {cuantos} "
+                                 f"{'caracter' if cuantos == 1 else 'caracteres'} y se "
+                                 f"numeran desde 1", nodo)
+        return i - 1
+
+    def cambiar_posicion(self, contenedor, indices, valor, marco, nodo):
+        """Devuelve el contenedor con una posición cambiada.
+
+        Devuelve uno nuevo en vez de modificarlo porque los textos de Python no se pueden
+        modificar en el lugar. Con arreglos, acá se agregaría el caso que sí muta.
+        """
+        if contenedor is None:
+            raise ErrorEjecucion(f"'{nodo.nombre}' todavía no tiene un valor: no se puede "
+                                 "cambiarle una posición", nodo)
+        i = self.posicion(contenedor, indices[0], marco, nodo)
+        if len(indices) > 1:
+            resto = self.cambiar_posicion(contenedor[i], indices[1:], valor, marco, nodo)
+        else:
+            resto = valor
+        return contenedor[:i] + resto + contenedor[i + 1:]
 
     def leer_valor(self, tipo, variable):
         try:
@@ -190,6 +222,9 @@ class Interprete:
             return valor
         if isinstance(e, N.Llamada):
             return self.llamar(e, marco)
+        if isinstance(e, N.Indice):
+            base = self.evaluar(e.base, marco)
+            return base[self.posicion(base, e.indice, marco, e)]
         if isinstance(e, N.Unaria):
             v = self.evaluar(e.operando, marco)
             return {"!": lambda: not v, "-": lambda: -v, "+": lambda: v}[e.op]()
