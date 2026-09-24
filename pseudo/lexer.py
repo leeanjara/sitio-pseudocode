@@ -5,11 +5,22 @@ from dataclasses import dataclass
 PALABRAS_RESERVADAS = {
     "Programa", "Var", "Funcion", "Procedimiento", "Inicio", "Fin",
     "Si", "Sino", "Mientras", "Para",
-    "Y", "O", "Mod", "Ref", "Verdadero", "Falso", "Mostrar", "Leer",
+    "Y", "O", "Mod", "Ref", "Verdadero", "Falso", "Mostrar", "Leer", "Retornar",
 }
-# 'Cadena' y 'String' son el mismo tipo; adentro se usa siempre 'String'.
-TIPOS = {"Entero", "Real", "String", "Cadena", "Logico", "Caracter"}
-CANONICO = {"Cadena": "String"}
+# Cada tipo con todos los nombres que acepta. El primero es el que se usa adentro del
+# verificador; los otros son sinónimos. Se puede elegir cualquiera, pero en un mismo
+# programa hay que usar siempre el mismo para cada tipo (ver _un_solo_nombre_por_tipo).
+NOMBRES_DE_TIPO = {
+    "Entero": ("Entero", "Int"),
+    "Real": ("Real", "Float"),
+    "String": ("String", "Cadena"),
+    "Logico": ("Logico", "Bool"),
+    "Caracter": ("Caracter", "Char"),
+}
+TIPOS = {nombre for nombres in NOMBRES_DE_TIPO.values() for nombre in nombres}
+# Sinónimo -> nombre interno ('Int' -> 'Entero').
+CANONICO = {nombre: canonico for canonico, nombres in NOMBRES_DE_TIPO.items()
+            for nombre in nombres if nombre != canonico}
 
 OPERADORES_DOBLES = {"==", "!=", "<=", ">=", "++", "--", "+=", "-=", "*=", "/=", "%="}
 # Operadores de acumulación: 'total += 1' es lo mismo que 'total = total + 1'.
@@ -195,27 +206,29 @@ def tokenizar(fuente, diag):
                 diag.error(f"se escribe '{a.valor} {correcto}' (con mayúscula)", b.linea, b.col)
                 b.tipo, b.valor = "KW", correcto
 
-    _un_solo_nombre_para_el_texto(tokens, diag)
+    _un_solo_nombre_por_tipo(tokens, diag)
     return tokens
 
 
-def _un_solo_nombre_para_el_texto(tokens, diag):
-    """'String' y 'Cadena' son el mismo tipo, pero hay que elegir uno y no mezclarlos.
+def _un_solo_nombre_por_tipo(tokens, diag):
+    """Cada tipo acepta varios nombres ('Entero' o 'Int'), pero no se mezclan.
 
     Se respeta el que aparece primero: es el que el estudiante eligió, y así el programa
-    queda parejo sin que el verificador imponga un nombre.
+    queda parejo sin que el verificador imponga un nombre. La regla es por tipo: usar
+    'Int' para los enteros y 'Real' para los reales está bien.
     """
-    usos = {"String": [], "Cadena": []}
-    for t in tokens:
-        if t.tipo == "TIPO" and t.valor in usos:
-            usos[t.valor].append(t)
-    if not (usos["String"] and usos["Cadena"]):
-        return
-
-    elegido = min(usos, key=lambda n: (usos[n][0].linea, usos[n][0].col))
-    otro = "Cadena" if elegido == "String" else "String"
-    primero = usos[elegido][0]
-    for t in usos[otro]:
-        diag.error(f"este programa ya usa '{elegido}' (línea {primero.linea}): son el mismo "
-                   f"tipo, pero hay que elegir uno solo y usarlo en todo el programa",
-                   t.linea, t.col)
+    for nombres in NOMBRES_DE_TIPO.values():
+        usos = {nombre: [t for t in tokens if t.tipo == "TIPO" and t.valor == nombre]
+                for nombre in nombres}
+        usados = [nombre for nombre in nombres if usos[nombre]]
+        if len(usados) < 2:
+            continue
+        elegido = min(usados, key=lambda n: (usos[n][0].linea, usos[n][0].col))
+        primero = usos[elegido][0]
+        for nombre in usados:
+            if nombre == elegido:
+                continue
+            for t in usos[nombre]:
+                diag.error(f"este programa ya usa '{elegido}' (línea {primero.linea}): "
+                           f"'{nombre}' y '{elegido}' son el mismo tipo, pero hay que elegir "
+                           "uno solo y usarlo en todo el programa", t.linea, t.col)

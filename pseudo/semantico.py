@@ -14,6 +14,14 @@ TEXTO = {"String", "Caracter"}
 # Qué se puede indexar con [ ] y qué tipo sale de adentro. Hoy solo el texto; cuando
 # existan los arreglos se agregan acá y ni el parser ni el intérprete cambian.
 ELEMENTO_DE = {"String": "Caracter"}
+# Conversiones explícitas: tipo al que se convierte -> tipos desde los que se puede.
+# A Logico no se convierte: un Logico sale de una comparación.
+CONVERSIONES = {
+    "String": {"String", "Entero", "Real", "Caracter", "Logico"},
+    "Entero": {"Entero", "Real", "String", "Caracter"},
+    "Real": {"Real", "Entero", "String"},
+    "Caracter": {"Caracter", "Entero", "String"},
+}
 COMPARADORES = {"==", "!=", "<", ">", "<=", ">="}
 SUBPROGRAMAS = ("funcion", "procedimiento")
 
@@ -185,7 +193,11 @@ class Analizador:
     # ------------------------------------------------------------- sentencias
 
     def bloque(self, sentencias):
-        for s in sentencias:
+        for anterior, s in zip([None] + sentencias, sentencias):
+            # Después de un Retornar, lo que sigue en el mismo bloque no se ejecuta nunca.
+            if isinstance(anterior, N.Retornar):
+                self.diag.advertencia("esta línea nunca se ejecuta: el 'Retornar' de arriba "
+                                      "ya termina la función", s.linea, s.col)
             self.sentencia(s)
 
     def sentencia(self, s):
@@ -213,6 +225,22 @@ class Analizador:
             self.bloque(s.cuerpo)
         elif isinstance(s, N.Para):
             self.para(s)
+        elif isinstance(s, N.Retornar):
+            self.retornar(s)
+
+    def retornar(self, s):
+        tipo = self.tipo(s.expr)
+        if self.actual is None:
+            self.diag.error("'Retornar' solo va dentro de una función: el programa principal "
+                            "no devuelve nada", s.linea, s.col)
+            return
+        if not self.actual.es_funcion:
+            self.diag.error(f"el procedimiento '{self.actual.nombre}' no devuelve un valor: "
+                            "'Retornar' solo va dentro de una Funcion", s.linea, s.col)
+            return
+        self.asigna_retorno = True
+        self.verificar_asignable(self.actual.tipo_retorno, tipo, s.expr,
+                                 f"el valor que devuelve '{self.actual.nombre}'")
 
     def asignacion(self, s):
         operador = getattr(s, "operador_incremento", None)
@@ -317,7 +345,21 @@ class Analizador:
             return self.tipo_binaria(e)
         if isinstance(e, N.Indice):
             return self.tipo_indice(e)
+        if isinstance(e, N.Conversion):
+            return self.tipo_conversion(e)
         return None
+
+    def tipo_conversion(self, e):
+        origen = self.tipo(e.expr)
+        # El intérprete lo necesita: en ejecución un Caracter y un String de una letra
+        # son iguales, pero Entero('7') y Entero("7") no dan lo mismo.
+        e.origen = origen
+        if e.destino not in CONVERSIONES:
+            self.diag.error(f"no se puede convertir a {e.escrito}: un {e.escrito} sale de una "
+                            "comparación (ej: edad >= 18)", e.linea, e.col)
+        elif origen is not None and origen not in CONVERSIONES[e.destino]:
+            self.diag.error(f"no se puede convertir un {origen} a {e.escrito}", e.linea, e.col)
+        return e.destino
 
     def tipo_indice(self, e):
         """Tipo de 'base[i]'. Devuelve el tipo del elemento, o None si no se puede."""

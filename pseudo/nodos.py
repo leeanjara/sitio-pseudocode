@@ -46,6 +46,18 @@ class Indice(Nodo):
 
 
 @dataclass
+class Conversion(Nodo):
+    """Conversión explícita: Entero(x), Cadena(x), Char(x)...
+
+    'destino' es el nombre interno del tipo ('Entero' aunque se haya escrito 'Int');
+    'escrito' es como lo puso el estudiante, para que los errores hablen su idioma.
+    """
+    destino: str
+    expr: Nodo
+    escrito: str
+
+
+@dataclass
 class Unaria(Nodo):
     op: str
     operando: Nodo
@@ -70,6 +82,15 @@ class LlamadaProc(Nodo):
 @dataclass
 class Mostrar(Nodo):
     args: list
+
+
+@dataclass
+class Retornar(Nodo):
+    """'Retornar valor': le da el valor a la función y la termina en ese momento.
+
+    Convive con 'nombre_funcion = valor', que también le da el valor pero no la termina.
+    """
+    expr: Nodo
 
 
 @dataclass

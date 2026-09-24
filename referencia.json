@@ -69,32 +69,36 @@
       "temas": [
         {
           "id": "entero",
-          "titulo": "Entero",
+          "titulo": "Entero (o Int)",
           "cubre": [
-            "Entero"
+            "Entero",
+            "Int"
           ],
           "resumen": "Números sin parte decimal: 0, 7, -25.",
-          "sintaxis": "<nombre> Entero",
+          "sintaxis": "<nombre> Entero\n<nombre> Int",
           "ejemplo": "Programa contar\nVar\n    cantidad Entero\nInicio\n    cantidad = 42\n    Mostrar(cantidad)\nFin",
           "notas": [
-            "Dividir dos Enteros da un Entero: 7 / 2 da 3, no 3.5."
+            "Dividir dos Enteros da un Entero: 7 / 2 da 3, no 3.5.",
+            "Int es otro nombre para el mismo tipo. Se puede usar cualquiera de los dos, pero siempre el mismo en todo el programa: Entero y Int no se mezclan."
           ]
         },
         {
           "id": "real",
-          "titulo": "Real",
+          "titulo": "Real (o Float)",
           "cubre": [
-            "Real"
+            "Real",
+            "Float"
           ],
           "resumen": "Números con parte decimal: 1.75, 0.5, -3.0.",
-          "sintaxis": "<nombre> Real",
+          "sintaxis": "<nombre> Real\n<nombre> Float",
           "ejemplo": "Programa reparto\nVar\n    manzanas, invitados Entero\n    por_invitado Real\nInicio\n    manzanas = 7\n    invitados = 2\n    por_invitado = manzanas / invitados          // 3.0: mal, se perdió el medio\n    por_invitado = manzanas * 1.0 / invitados    // 3.5: bien\n    Mostrar(por_invitado)\nFin",
           "notas": [
             "Un Entero se puede guardar en un Real: se convierte solo (3 pasa a ser 3.0).",
             "Al revés no: guardar un Real en un Entero es un error, porque se perdería la parte decimal.",
             "Ojo con dividir dos Enteros: la cuenta se hace entre enteros y recién después el resultado se guarda en el Real, así que 7 / 2 da 3.0 y no 3.5.",
-            "Para que la división dé decimales, alguno de los dos tiene que ser Real. El truco es multiplicar por 1.0 antes de dividir: manzanas * 1.0 / invitados.",
-            "Se escribe con punto, no con coma: 1.75."
+            "Para que la división dé decimales, alguno de los dos tiene que ser Real. El truco es multiplicar por 1.0 antes de dividir (manzanas * 1.0 / invitados), o convertir uno con Real(manzanas) / invitados.",
+            "Se escribe con punto, no con coma: 1.75.",
+            "Float es otro nombre para el mismo tipo. Se puede usar cualquiera de los dos, pero siempre el mismo en todo el programa: Real y Float no se mezclan."
           ]
         },
         {
@@ -109,7 +113,7 @@
           "ejemplo": "Programa textos\nVar\n    saludo, nombre, mensaje String\nInicio\n    nombre = \"Ana\"\n    saludo = \"Hola \"\n    mensaje = saludo + nombre\n    Mostrar(mensaje)\nFin",
           "notas": [
             "Son el mismo tipo, pero no se pueden mezclar en un mismo programa: si empezaste con String, seguí con String.",
-            "Con + se pegan dos textos, pero no se puede sumar texto con número: para eso usá las comas de Mostrar.",
+            "Con + se pegan dos textos, pero no se puede sumar texto con número: para eso usá las comas de Mostrar, o convertí el número con String(x).",
             "Para llegar a un carácter suelto se usan corchetes; está explicado en 'Posiciones de un texto'."
           ]
         },
@@ -131,33 +135,56 @@
         },
         {
           "id": "caracter",
-          "titulo": "Caracter",
+          "titulo": "Caracter (o Char)",
           "cubre": [
-            "Caracter"
+            "Caracter",
+            "Char"
           ],
           "resumen": "Un solo carácter, entre comillas simples.",
-          "sintaxis": "<nombre> Caracter",
+          "sintaxis": "<nombre> Caracter\n<nombre> Char",
           "ejemplo": "Programa inicial\nVar\n    letra Caracter\nInicio\n    letra = 'A'\n    Mostrar(letra)\nFin",
           "notas": [
             "Comillas simples para un carácter ('a'); comillas dobles para texto (\"hola\").",
             "Un Caracter se puede guardar en un String; al revés no.",
-            "Sacar una posición de un texto da un Caracter: inicial = nombre[1]."
+            "Sacar una posición de un texto da un Caracter: inicial = nombre[1].",
+            "Char es otro nombre para el mismo tipo. Se puede usar cualquiera de los dos, pero siempre el mismo en todo el programa: Caracter y Char no se mezclan."
           ]
         },
         {
           "id": "logico",
-          "titulo": "Logico",
+          "titulo": "Logico (o Bool)",
           "cubre": [
             "Logico",
+            "Bool",
             "Verdadero",
             "Falso"
           ],
           "resumen": "Vale Verdadero o Falso, y nada más. Es lo que devuelven las comparaciones.",
-          "sintaxis": "<nombre> Logico",
+          "sintaxis": "<nombre> Logico\n<nombre> Bool",
           "ejemplo": "Programa mayoria\nVar\n    edad Entero\n    es_mayor Logico\nInicio\n    edad = 20\n    es_mayor = edad >= 18\n    Si(es_mayor)\n        Mostrar(\"Es mayor de edad\")\n    Fin Si\nFin",
           "notas": [
             "Verdadero y Falso van con mayúscula inicial, como toda palabra reservada.",
-            "Las condiciones de Si, Mientras y Para tienen que ser Logico."
+            "Las condiciones de Si, Mientras y Para tienen que ser Logico.",
+            "Bool es otro nombre para el mismo tipo. Se puede usar cualquiera de los dos, pero siempre el mismo en todo el programa: Logico y Bool no se mezclan."
+          ]
+        },
+        {
+          "id": "conversiones",
+          "titulo": "Conversiones: Entero(x), Real(x), String(x), Caracter(x)",
+          "cubre": [],
+          "resumen": "El nombre de un tipo usado como función convierte un valor a ese tipo. Sirve, por ejemplo, para armar un texto con números y guardarlo en una variable.",
+          "sintaxis": "Entero(<valor>)\nReal(<valor>)\nString(<valor>)\nCaracter(<valor>)",
+          "ejemplo": "Programa promedio\nVar\n    suma, cantidad Entero\n    promedio Real\n    mensaje String\nInicio\n    suma = 23\n    cantidad = 3\n    promedio = Real(suma) / cantidad      // con Real(...) la división da decimales\n    mensaje = \"Promedio: \" + String(promedio)\n    Mostrar(mensaje)\n    Mostrar(Entero(promedio))             // 7: corta los decimales\nFin",
+          "notas": [
+            "Experimental: la forma de escribirlo todavía no está confirmada en la materia.",
+            "String(x) convierte cualquier valor a texto, igual que como lo mostraría Mostrar.",
+            "Entero(x): de un Real corta los decimales (7.9 da 7 y -7.9 da -7); de un texto lo lee como número (\"42\" da 42); de un Caracter da su código (Entero('A') da 65).",
+            "Real(x): de un Entero, o de un texto con punto o coma (\"3.5\" o \"3,5\").",
+            "Caracter(x): de un Entero da el carácter con ese código (Caracter(65) da 'A'); de un texto de una sola letra, esa letra.",
+            "Ojo: Entero('7') da 55, el código del carácter 7. Para el valor del dígito, pasá por texto: Entero(String('7')) da 7.",
+            "A Logico no se convierte: un Logico sale de una comparación.",
+            "Se usa el mismo nombre de tipo que en el resto del programa: si declaraste con String, es String(x) y no Cadena(x). Los alias también sirven: Int(x), Float(x), Char(x).",
+            "Si el texto no es un número, o no existe un carácter con ese código, el programa se corta con un error que lo explica."
           ]
         }
       ]
@@ -336,10 +363,28 @@
           "sintaxis": "Funcion <nombre>(<param> <Tipo>, ...) <TipoQueDevuelve>\nInicio\n    <nombre> = <valor>\nFin",
           "ejemplo": "Programa area\nVar\n    resultado Real\nFuncion area_rectangulo(base Real, altura Real) Real\nInicio\n    area_rectangulo = base * altura\nFin\nInicio\n    resultado = area_rectangulo(3.0, 4.0)\n    Mostrar(\"El área es \", resultado)\nFin",
           "notas": [
-            "Para devolver el valor se le asigna al propio nombre de la función. No existe retornar ni return.",
+            "Para devolver el valor hay dos formas: asignárselo al nombre de la función (area_rectangulo = ...), que guarda el valor pero sigue ejecutando hasta el Fin, o Retornar, que lo devuelve y sale en ese momento. Ver 'Retornar'.",
             "El tipo que devuelve va después del paréntesis de cierre.",
             "Cada parámetro lleva su propio tipo: (a Entero, b Entero), no (a, b Entero).",
             "Las funciones van entre la sección Var y el Inicio del programa."
+          ]
+        },
+        {
+          "id": "retornar",
+          "titulo": "Retornar",
+          "cubre": [
+            "Retornar"
+          ],
+          "resumen": "Devuelve un valor y termina la función en ese mismo momento, aunque esté adentro de un Para o de un Si.",
+          "sintaxis": "Retornar <valor>",
+          "ejemplo": "Programa buscar_numero\nVar\n    posicion Entero\nFuncion buscar(n Entero) Entero\nVar\n    i Entero\nInicio\n    Para (i = 1, i++, i <= 5)\n        Si(i == n)\n            Retornar i          // lo encontró: sale acá\n        Fin Si\n    Fin Para\n    Retornar -1                 // solo llega si no lo encontró\nFin\nInicio\n    posicion = buscar(3)\n    Mostrar(posicion)\nFin",
+          "notas": [
+            "Experimental: todavía no está confirmado en la materia.",
+            "La diferencia con asignar al nombre: 'buscar = i' guarda el valor y la función sigue hasta el Fin, así que una asignación posterior lo pisa. 'Retornar i' sale ahí mismo. En el ejemplo, con 'buscar = i' en vez de 'Retornar i', buscar(3) daría -1.",
+            "Se pueden usar las dos formas en la misma función.",
+            "Solo va dentro de una Funcion, y siempre con un valor del tipo que devuelve la función.",
+            "Lo que haya después de un Retornar en el mismo bloque nunca se ejecuta: el verificador lo avisa.",
+            "return, devolver y similares no existen: se usa Retornar."
           ]
         },
         {

@@ -24,12 +24,12 @@ COMPARADORES = ("==", "!=", "<", ">", "<=", ">=")
 # o con el nombre de otro lenguaje, y la forma correcta.
 SUGERENCIAS_SENTENCIA = {
     "si": "Si", "sino": "Sino", "fin": "Fin", "mientras": "Mientras", "para": "Para",
-    "mostrar": "Mostrar", "leer": "Leer",
+    "mostrar": "Mostrar", "leer": "Leer", "retornar": "Retornar",
     "inicio": "Inicio", "escribir": "Mostrar", "imprimir": "Mostrar", "print": "Mostrar",
     "input": "Leer",
 }
 INSTRUCCIONES_CON_BLOQUE = {"Si", "Mientras", "Para", "Mostrar", "Leer"}
-PALABRAS_RETORNO ={"retornar", "return", "devolver", "retorna", "devuelve", "regresar"}
+PALABRAS_RETORNO ={"return", "devolver", "retorna", "devuelve", "regresar"}
 # Instrucciones que existen en otros pseudocódigos pero no en este, con la alternativa.
 INSTRUCCIONES_DE_OTRAS_NOTACIONES = {
     "repetir": "para repetir se usan 'Mientras(...)' o 'Para (...)'",
@@ -40,15 +40,18 @@ INSTRUCCIONES_DE_OTRAS_NOTACIONES = {
 }
 # Operadores que son palabras: se escriben con mayúscula como el resto de las reservadas.
 OPERADORES_PALABRA = {"y": "Y", "o": "O", "mod": "Mod"}
+# Un nombre de tipo mal escrito -> el nombre válido más parecido. Los sinónimos en
+# minúscula ('int') se corrigen a su propia forma ('Int'), no al nombre en castellano.
 SUGERENCIAS_TIPO = {
-    "entero": "Entero", "int": "Entero", "integer": "Entero",
-    "flotante": "Real", "float": "Real", "real": "Real", "double": "Real",
+    "entero": "Entero", "int": "Int", "integer": "Int",
+    "flotante": "Real", "float": "Float", "real": "Real", "double": "Float",
     "decimal": "Real",
     "string": "String", "cadena": "Cadena", "texto": "String", "str": "String",
-    "booleano": "Logico", "bool": "Logico", "boolean": "Logico", "logico": "Logico",
-    "caracter": "Caracter", "char": "Caracter",
+    "booleano": "Logico", "bool": "Bool", "boolean": "Bool", "logico": "Logico",
+    "caracter": "Caracter", "char": "Char",
 }
-TIPOS_TEXTO = "Entero, Real, String (o Cadena), Logico o Caracter"
+TIPOS_TEXTO = ("Entero (o Int), Real (o Float), String (o Cadena), Logico (o Bool) "
+               "o Caracter (o Char)")
 FORMA_PARA = "Para (i = 0, i++, i < 10)"
 MENSAJE_MAYUSCULAS = "las palabras reservadas distinguen mayúsculas y no llevan tilde"
 
@@ -375,7 +378,7 @@ class Parser:
             metodo = {
                 "Si": self.parse_si, "Mientras": self.parse_mientras, "Para": self.parse_para,
                 "Mostrar": self.parse_mostrar,
-                "Leer": self.parse_leer,
+                "Leer": self.parse_leer, "Retornar": self.parse_retornar,
             }.get(tok.valor)
             if metodo:
                 return metodo()
@@ -391,8 +394,8 @@ class Parser:
                 return asignacion
             if tok.valor not in self.nombres_subs:
                 if clave in PALABRAS_RETORNO:
-                    raise self.error(f"no existe '{tok.valor}': una función devuelve su valor "
-                                     "asignándolo a su propio nombre (ej: calcular_edad = edad)")
+                    raise self.error(f"no existe '{tok.valor}': para devolver un valor se usa "
+                                     "'Retornar' (ej: Retornar edad)")
                 if clave in INSTRUCCIONES_DE_OTRAS_NOTACIONES:
                     raise self.error(f"no existe '{tok.valor}' en este pseudocódigo: "
                                      f"{INSTRUCCIONES_DE_OTRAS_NOTACIONES[clave]}")
@@ -573,6 +576,15 @@ class Parser:
         self.fin_linea()
         return N.Mostrar(inicio.linea, inicio.col, args)
 
+    def parse_retornar(self):
+        inicio = self.avanzar()
+        if self.act.tipo in ("NL", "EOF"):
+            raise self.error("a 'Retornar' le falta el valor que devuelve la función "
+                             "(ej: Retornar edad)")
+        expr = self.parse_expr()
+        self.fin_linea()
+        return N.Retornar(inicio.linea, inicio.col, expr)
+
     def parse_leer(self):
         inicio = self.avanzar()
         args = self.parse_argumentos("Leer")
@@ -687,6 +699,8 @@ class Parser:
         if self.es_kw("Verdadero", "Falso"):
             self.avanzar()
             return N.Literal(tok.linea, tok.col, tok.valor == "Verdadero", "Logico")
+        if tok.tipo == "TIPO" and self.ver().tipo == "OP" and self.ver().valor == "(":
+            return self.parse_indices(self.parse_conversion())
         if tok.tipo == "ID":
             if self.ver().tipo == "OP" and self.ver().valor == "(":
                 return self.parse_indices(self.parse_llamada())
@@ -698,6 +712,20 @@ class Parser:
             self.esperar_op(")", f"')' para cerrar el '(' de la columna {tok.col}")
             return self.parse_indices(expr)
         raise self.error_esperado("un valor o una expresión")
+
+    def parse_conversion(self):
+        """Entero(x), Cadena(x)...: el nombre de un tipo usado como función."""
+        tipo = self.avanzar()
+        self.avanzar()      # (
+        if self.es_op(")"):
+            raise self.error(f"a '{tipo.valor}()' le falta el valor que hay que convertir "
+                             f"(ej: {tipo.valor}(edad))")
+        expr = self.parse_expr()
+        if self.es_op(","):
+            raise self.error(f"'{tipo.valor}(...)' convierte un solo valor")
+        self.esperar_op(")", f"')' para cerrar '{tipo.valor}('")
+        return N.Conversion(tipo.linea, tipo.col, CANONICO.get(tipo.valor, tipo.valor),
+                            expr, tipo.valor)
 
     def parse_indices(self, base):
         """Los '[...]' que vengan pegados: base[i], y más adelante base[i][j].

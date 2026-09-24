@@ -1,10 +1,15 @@
 """Intérprete: ejecuta un programa que ya pasó el análisis sin errores."""
+import re
 import sys
 
 from . import nodos as N
 from .predefinidas import PREDEFINIDAS
 
 MAX_PROFUNDIDAD = 1000
+# Lo que Entero("...") y Real("...") aceptan. Más estricto que int()/float() de Python,
+# que también aceptarían "1_000", "1e5" o "inf".
+NUMERO_ENTERO = re.compile(r"[+-]?\d+")
+NUMERO_REAL = re.compile(r"[+-]?\d+(\.\d+)?")
 
 
 class ErrorEjecucion(Exception):
@@ -13,6 +18,15 @@ class ErrorEjecucion(Exception):
         self.mensaje = mensaje
         self.linea = nodo.linea
         self.col = nodo.col
+
+
+class _Retorno(Exception):
+    """Lo lanza 'Retornar' para salir de la función desde cualquier profundidad (dentro de
+    un Para, de un Si...). No es un error: lo ataja la llamada a la función."""
+
+    def __init__(self, valor):
+        super().__init__()
+        self.valor = valor
 
 
 class Celda:
@@ -113,6 +127,8 @@ class Interprete:
                 self.bloque(s.cuerpo, marco)
         elif isinstance(s, N.Para):
             self.para(s, marco)
+        elif isinstance(s, N.Retornar):
+            raise _Retorno(self.evaluar(s.expr, marco))
 
     def para(self, s, marco):
         self.sentencia(s.inicializacion, marco)
@@ -120,6 +136,43 @@ class Interprete:
             self.contar_paso(s)
             self.bloque(s.cuerpo, marco)
             self.sentencia(s.incremento, marco)
+
+    # ----------------------------------------------------------- conversiones
+
+    def convertir_explicito(self, e, valor):
+        """Entero(x), Cadena(x)... El análisis ya garantizó que la conversión existe."""
+        destino, origen, escrito = e.destino, e.origen, e.escrito
+        if destino == "String":
+            return formatear(valor)
+        if destino == "Entero":
+            if origen == "Real":
+                return int(valor)               # trunca hacia cero, como la división
+            if origen == "Caracter":
+                return ord(valor)               # el código: Entero('A') da 65
+            if origen == "String":
+                if not NUMERO_ENTERO.fullmatch(valor.strip()):
+                    raise ErrorEjecucion(f'{escrito}("{valor}"): ese texto no es un número '
+                                         "entero", e)
+                return int(valor.strip())
+            return valor
+        if destino == "Real":
+            if origen == "String":
+                limpio = valor.strip().replace(",", ".")
+                if not NUMERO_REAL.fullmatch(limpio):
+                    raise ErrorEjecucion(f'{escrito}("{valor}"): ese texto no es un número', e)
+                return float(limpio)
+            return float(valor)
+        if destino == "Caracter":
+            if origen == "Entero":
+                if not 0 <= valor <= 0x10FFFF:
+                    raise ErrorEjecucion(f"{escrito}({valor}): no hay ningún caracter con "
+                                         "ese código", e)
+                return chr(valor)               # Caracter(65) da 'A'
+            if origen == "String" and len(valor) != 1:
+                raise ErrorEjecucion(f'{escrito}("{valor}"): el texto tiene que tener un solo '
+                                     f"caracter, y tiene {len(valor)}", e)
+            return valor
+        return valor
 
     # ------------------------------------------------------------- posiciones
 
@@ -201,6 +254,9 @@ class Interprete:
                                  "que nunca termina?", llamada)
         try:
             self.bloque(sub.cuerpo, nuevo)
+        except _Retorno as r:
+            # Retornar = darle el valor al nombre de la función + salir.
+            nuevo[sub.nombre].valor = convertir(sub.tipo_retorno, r.valor)
         finally:
             self.profundidad -= 1
 
@@ -222,6 +278,8 @@ class Interprete:
             return valor
         if isinstance(e, N.Llamada):
             return self.llamar(e, marco)
+        if isinstance(e, N.Conversion):
+            return self.convertir_explicito(e, self.evaluar(e.expr, marco))
         if isinstance(e, N.Indice):
             base = self.evaluar(e.base, marco)
             return base[self.posicion(base, e.indice, marco, e)]
