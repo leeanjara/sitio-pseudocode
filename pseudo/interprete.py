@@ -30,12 +30,32 @@ class _Retorno(Exception):
 
 
 class Celda:
-    """Lugar donde vive el valor de una variable (compartible por parámetros 'Ref')."""
+    """Lugar donde vive el valor de una variable (compartible por parámetros 'Ref').
+
+    Un arreglo es una lista de Celdas, una por posición: así 'notas[3]' es un lugar propio
+    que se puede pasar por Ref igual que una variable. En una matriz, cada posición guarda
+    a su vez la lista de Celdas de su fila.
+    """
     __slots__ = ("tipo", "valor")
 
     def __init__(self, tipo, valor=None):
         self.tipo = tipo
         self.valor = valor
+
+
+def nueva_celda(tipo):
+    """La celda de una variable recién declarada. Un arreglo nace con todas sus posiciones,
+    vacías; cualquier otra cosa nace sin valor."""
+    if isinstance(tipo, N.TipoArreglo):
+        return Celda(tipo, [nueva_celda(tipo.elemento) for _ in range(tipo.tamanio)])
+    return Celda(tipo)
+
+
+def copiar(valor):
+    """Un arreglo pasado sin Ref: el subprograma trabaja sobre su propia copia."""
+    if isinstance(valor, list):
+        return [Celda(c.tipo, copiar(c.valor)) for c in valor]
+    return valor
 
 
 def convertir(tipo, valor):
@@ -70,7 +90,7 @@ class Interprete:
         self.pasos = 0
         self.profundidad = 0
         self.subprogramas = {s.nombre: s for s in programa.subprogramas}
-        self.globales = {d.nombre: Celda(d.tipo) for d in programa.variables}
+        self.globales = {d.nombre: nueva_celda(d.tipo) for d in programa.variables}
 
     def ejecutar(self):
         limite_previo = sys.getrecursionlimit()
@@ -100,20 +120,25 @@ class Interprete:
     def sentencia(self, s, marco):
         self.contar_paso(s)
         if isinstance(s, N.Asignacion):
-            celda = self.celda(s.nombre, marco)
             valor = self.evaluar(s.expr, marco)
-            if s.indices:
-                celda.valor = self.cambiar_posicion(celda.valor, s.indices, valor, marco, s)
-            else:
+            if s.lugar is None:
+                celda = self.celda(s.nombre, marco)
                 celda.valor = convertir(celda.tipo, valor)
+            else:
+                self.guardar(s.lugar, valor, marco)
         elif isinstance(s, N.LlamadaProc):
             self.llamar(s.llamada, marco)
         elif isinstance(s, N.Mostrar):
             self.salida("".join(formatear(self.evaluar(a, marco)) for a in s.args))
         elif isinstance(s, N.Leer):
-            for v in s.variables:
-                celda = self.celda(v.nombre, marco)
-                celda.valor = self.leer_valor(celda.tipo, v)
+            for lugar in s.variables:
+                celda, letras, nombre = self.ubicar(lugar, marco)
+                if letras:
+                    # Leer(texto[1]): una letra suelta.
+                    letra = self.leer_valor("Caracter", lugar, nombre)
+                    celda.valor = self.cambiar_posicion(celda.valor, letras, letra, marco, nombre)
+                else:
+                    celda.valor = self.leer_valor(celda.tipo, lugar, nombre)
         elif isinstance(s, N.Si):
             for condicion, cuerpo in s.ramas:
                 if self.evaluar(condicion, marco):
@@ -148,7 +173,11 @@ class Interprete:
             if origen == "Real":
                 return int(valor)               # trunca hacia cero, como la división
             if origen == "Caracter":
-                return ord(valor)               # el código: Entero('A') da 65
+                # El dígito, no el código: Entero('7') da 7.
+                if not "0" <= valor <= "9":
+                    raise ErrorEjecucion(f"{escrito}('{valor}'): solo se convierte un caracter "
+                                         "que sea un dígito, de '0' a '9'", e)
+                return int(valor)
             if origen == "String":
                 if not NUMERO_ENTERO.fullmatch(valor.strip()):
                     raise ErrorEjecucion(f'{escrito}("{valor}"): ese texto no es un número '
@@ -164,10 +193,13 @@ class Interprete:
             return float(valor)
         if destino == "Caracter":
             if origen == "Entero":
-                if not 0 <= valor <= 0x10FFFF:
-                    raise ErrorEjecucion(f"{escrito}({valor}): no hay ningún caracter con "
-                                         "ese código", e)
-                return chr(valor)               # Caracter(65) da 'A'
+                # El dígito, no el código: Caracter(7) da '7'. Un número de más de una
+                # cifra no entra en un solo caracter; para eso está String(x).
+                if not 0 <= valor <= 9:
+                    raise ErrorEjecucion(f"{escrito}({valor}): solo se convierte un número de "
+                                         "una cifra, de 0 a 9 (para más cifras usá "
+                                         "String(x))", e)
+                return str(valor)
             if origen == "String" and len(valor) != 1:
                 raise ErrorEjecucion(f'{escrito}("{valor}"): el texto tiene que tener un solo '
                                      f"caracter, y tiene {len(valor)}", e)
@@ -176,37 +208,77 @@ class Interprete:
 
     # ------------------------------------------------------------- posiciones
 
-    def posicion(self, contenedor, expr, marco, nodo):
+    def posicion(self, contenedor, expr, marco, nodo, nombre):
         """Traduce la posición del pseudocódigo (desde 1) a la de Python (desde 0)."""
         i = self.evaluar(expr, marco)
-        if not 1 <= i <= len(contenedor):
-            cuantos = len(contenedor)
-            raise ErrorEjecucion(f"la posición {i} no existe: hay {cuantos} "
-                                 f"{'caracter' if cuantos == 1 else 'caracteres'} y se "
-                                 f"numeran desde 1", nodo)
-        return i - 1
+        cuantos = len(contenedor)
+        if 1 <= i <= cuantos:
+            return i - 1
+        if isinstance(contenedor, list):
+            raise ErrorEjecucion(f"la posición {i} no existe: '{nombre}' tiene {cuantos} "
+                                 f"{'posición' if cuantos == 1 else 'posiciones'}, de la 1 a "
+                                 f"la {cuantos}", nodo)
+        raise ErrorEjecucion(f"la posición {i} no existe: hay {cuantos} "
+                             f"{'caracter' if cuantos == 1 else 'caracteres'} y se "
+                             f"numeran desde 1", nodo)
 
-    def cambiar_posicion(self, contenedor, indices, valor, marco, nodo):
-        """Devuelve el contenedor con una posición cambiada.
+    def ubicar(self, lugar, marco):
+        """La celda donde vive un lugar: 'x', 'notas[3]', 'm[2][1]'.
+
+        Baja por los arreglos hasta la celda de esa posición. Devuelve (celda, accesos que
+        sobran, nombre para los mensajes). Sobran accesos solo al llegar a un texto, porque
+        sus letras no son celdas: en 'nombres[2][1]' la celda es la de 'nombres[2]' y queda
+        el '[1]', que es una letra de ese texto.
+        """
+        raiz, accesos = N.desarmar(lugar)
+        celda, nombre = self.celda(raiz.nombre, marco), raiz.nombre
+        while accesos and isinstance(celda.tipo, N.TipoArreglo):
+            acceso = accesos.pop(0)
+            i = self.posicion(celda.valor, acceso.indice, marco, acceso, nombre)
+            celda, nombre = celda.valor[i], f"{nombre}[{i + 1}]"
+        return celda, accesos, nombre
+
+    def guardar(self, lugar, valor, marco):
+        celda, letras, nombre = self.ubicar(lugar, marco)
+        if letras:
+            celda.valor = self.cambiar_posicion(celda.valor, letras, valor, marco, nombre)
+        else:
+            celda.valor = convertir(celda.tipo, valor)
+
+    def leer_posicion(self, e, marco):
+        """El valor de 'base[i]', sea una posición de un arreglo o una letra de un texto."""
+        if not N.es_lugar(e):
+            # La posición de algo que no es una variable: Upper(t)[1]. Solo puede ser texto.
+            base = self.evaluar(e.base, marco)
+            return base[self.posicion(base, e.indice, marco, e, None)]
+        celda, letras, nombre = self.ubicar(e, marco)
+        valor = celda.valor
+        if valor is None:
+            que = f"la posición {nombre}" if "[" in nombre else f"la variable '{nombre}'"
+            raise ErrorEjecucion(f"{que} se usa antes de tener un valor", e)
+        for acceso in letras:
+            valor = valor[self.posicion(valor, acceso.indice, marco, acceso, nombre)]
+        return valor
+
+    def cambiar_posicion(self, texto, accesos, letra, marco, nombre):
+        """Devuelve el texto con una letra cambiada.
 
         Devuelve uno nuevo en vez de modificarlo porque los textos de Python no se pueden
-        modificar en el lugar. Con arreglos, acá se agregaría el caso que sí muta.
+        modificar en el lugar. (Los arreglos sí: ahí se cambia la celda de la posición.)
         """
-        if contenedor is None:
-            raise ErrorEjecucion(f"'{nodo.nombre}' todavía no tiene un valor: no se puede "
-                                 "cambiarle una posición", nodo)
-        i = self.posicion(contenedor, indices[0], marco, nodo)
-        if len(indices) > 1:
-            resto = self.cambiar_posicion(contenedor[i], indices[1:], valor, marco, nodo)
-        else:
-            resto = valor
-        return contenedor[:i] + resto + contenedor[i + 1:]
+        if texto is None:
+            raise ErrorEjecucion(f"'{nombre}' todavía no tiene un valor: no se puede "
+                                 "cambiarle una posición", accesos[0])
+        i = self.posicion(texto, accesos[0].indice, marco, accesos[0], nombre)
+        if len(accesos) > 1:
+            letra = self.cambiar_posicion(texto[i], accesos[1:], letra, marco, nombre)
+        return texto[:i] + letra + texto[i + 1:]
 
-    def leer_valor(self, tipo, variable):
+    def leer_valor(self, tipo, nodo, nombre):
         try:
             texto = self.entrada()
         except EOFError:
-            raise ErrorEjecucion(f"Leer({variable.nombre}): no hay más datos de entrada", variable)
+            raise ErrorEjecucion(f"Leer({nombre}): no hay más datos de entrada", nodo)
         limpio = texto.strip()
         try:
             if tipo == "Entero":
@@ -214,16 +286,16 @@ class Interprete:
             if tipo == "Real":
                 return float(limpio.replace(",", "."))
         except ValueError:
-            raise ErrorEjecucion(f"Leer({variable.nombre}): se esperaba un número {tipo}, pero se "
-                                 f"ingresó '{texto}'", variable)
+            raise ErrorEjecucion(f"Leer({nombre}): se esperaba un número {tipo}, pero se "
+                                 f"ingresó '{texto}'", nodo)
         if tipo == "Logico":
             if limpio.lower() in ("verdadero", "falso"):
                 return limpio.lower() == "verdadero"
-            raise ErrorEjecucion(f"Leer({variable.nombre}): se esperaba Verdadero o Falso, pero se "
-                                 f"ingresó '{texto}'", variable)
+            raise ErrorEjecucion(f"Leer({nombre}): se esperaba Verdadero o Falso, pero se "
+                                 f"ingresó '{texto}'", nodo)
         if tipo == "Caracter" and len(texto) != 1:
-            raise ErrorEjecucion(f"Leer({variable.nombre}): se esperaba un solo caracter, pero se "
-                                 f"ingresó '{texto}'", variable)
+            raise ErrorEjecucion(f"Leer({nombre}): se esperaba un solo caracter, pero se "
+                                 f"ingresó '{texto}'", nodo)
         return texto
 
     # ------------------------------------------------------------ expresiones
@@ -232,7 +304,7 @@ class Interprete:
         predefinida = PREDEFINIDAS.get(llamada.nombre)
         if predefinida is not None:
             # A los parámetros 'Ref' se les pasa la celda, para que puedan devolver un valor.
-            valores = [self.celda(arg.nombre, marco) if p.ref else self.evaluar(arg, marco)
+            valores = [self.ubicar(arg, marco)[0] if p.ref else self.evaluar(arg, marco)
                        for p, arg in zip(predefinida.sub.parametros, llamada.args)]
             return predefinida.implementacion(*valores)
 
@@ -240,11 +312,13 @@ class Interprete:
         nuevo = {}
         for p, arg in zip(sub.parametros, llamada.args):
             if p.ref:
-                nuevo[p.nombre] = self.celda(arg.nombre, marco)
+                # La misma celda de afuera: una variable o una posición de un arreglo.
+                nuevo[p.nombre] = self.ubicar(arg, marco)[0]
             else:
-                nuevo[p.nombre] = Celda(p.tipo, convertir(p.tipo, self.evaluar(arg, marco)))
+                valor = convertir(p.tipo, self.evaluar(arg, marco))
+                nuevo[p.nombre] = Celda(p.tipo, copiar(valor))
         for d in sub.variables:
-            nuevo[d.nombre] = Celda(d.tipo)
+            nuevo[d.nombre] = nueva_celda(d.tipo)
         if sub.es_funcion:
             nuevo[sub.nombre] = Celda(sub.tipo_retorno)
 
@@ -281,8 +355,7 @@ class Interprete:
         if isinstance(e, N.Conversion):
             return self.convertir_explicito(e, self.evaluar(e.expr, marco))
         if isinstance(e, N.Indice):
-            base = self.evaluar(e.base, marco)
-            return base[self.posicion(base, e.indice, marco, e)]
+            return self.leer_posicion(e, marco)
         if isinstance(e, N.Unaria):
             v = self.evaluar(e.operando, marco)
             return {"!": lambda: not v, "-": lambda: -v, "+": lambda: v}[e.op]()

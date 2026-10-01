@@ -11,8 +11,8 @@ RESERVADAS_POR_FORMA = {normalizar(p): p for p in PALABRAS_RESERVADAS | TIPOS}
 
 NUMERICOS = {"Entero", "Real"}
 TEXTO = {"String", "Caracter"}
-# Qué se puede indexar con [ ] y qué tipo sale de adentro. Hoy solo el texto; cuando
-# existan los arreglos se agregan acá y ni el parser ni el intérprete cambian.
+# Tipos simples que se pueden indexar con [ ] y qué sale de adentro. Los arreglos también
+# se indexan, pero su elemento lo dice su propio tipo: ver elemento_de().
 ELEMENTO_DE = {"String": "Caracter"}
 # Conversiones explícitas: tipo al que se convierte -> tipos desde los que se puede.
 # A Logico no se convierte: un Logico sale de una comparación.
@@ -24,6 +24,18 @@ CONVERSIONES = {
 }
 COMPARADORES = {"==", "!=", "<", ">", "<=", ">="}
 SUBPROGRAMAS = ("funcion", "procedimiento")
+SIN_POSICIONES = "solo los textos y los arreglos tienen posiciones"
+
+
+def elemento_de(tipo):
+    """Lo que hay en cada posición de 'tipo', o None si no tiene posiciones."""
+    if isinstance(tipo, N.TipoArreglo):
+        return tipo.elemento
+    return ELEMENTO_DE.get(tipo)
+
+
+def es_arreglo(tipo):
+    return isinstance(tipo, N.TipoArreglo)
 
 
 def asignable(destino, origen):
@@ -207,13 +219,13 @@ class Analizador:
             self.llamada(s.llamada, como_expresion=False)
         elif isinstance(s, N.Mostrar):
             for a in s.args:
-                self.tipo(a)
+                if es_arreglo(self.tipo(a)):
+                    self.diag.error("Mostrar no muestra un arreglo entero: hay que mostrar cada "
+                                    "posición, por ejemplo recorriéndolo con un Para",
+                                    a.linea, a.col)
         elif isinstance(s, N.Leer):
             for v in s.variables:
-                simbolo = self.resolver_variable(v.nombre, v, escritura=True)
-                if simbolo is not None and simbolo.clase in SUBPROGRAMAS:
-                    self.diag.error(f"Leer necesita una variable, pero '{v.nombre}' es "
-                                    f"{articulo(simbolo.sub)}", v.linea, v.col)
+                self.leer(v)
         elif isinstance(s, N.Si):
             for i, (condicion, cuerpo) in enumerate(s.ramas):
                 self.condicion(condicion, "Si" if i == 0 else "Sino Si")
@@ -242,12 +254,58 @@ class Analizador:
         self.verificar_asignable(self.actual.tipo_retorno, tipo, s.expr,
                                  f"el valor que devuelve '{self.actual.nombre}'")
 
+    def leer(self, lugar):
+        if isinstance(lugar, N.Variable):
+            simbolo = self.resolver_variable(lugar.nombre, lugar, escritura=True)
+            tipo = simbolo.tipo if simbolo is not None else None
+        else:
+            simbolo, tipo, _ = self.analizar_lugar(lugar, escritura=True)
+        if simbolo is not None and simbolo.clase in SUBPROGRAMAS:
+            self.diag.error(f"Leer necesita una variable, pero '{simbolo.nombre}' es "
+                            f"{articulo(simbolo.sub)}", lugar.linea, lugar.col)
+        elif es_arreglo(tipo):
+            self.diag.error("Leer no lee un arreglo entero: hay que leer cada posición "
+                            f"(ej: Leer({simbolo.nombre}[i]) dentro de un Para)",
+                            lugar.linea, lugar.col)
+
+    def analizar_lugar(self, lugar, escritura):
+        """Una posición donde se guarda un valor: 'notas[i]', 'm[i][j]', 'texto[1]'.
+
+        Devuelve (símbolo de la variable, tipo de esa posición, si alguna de las posiciones
+        es la de un texto). El tipo es None si no se pudo saber; el error ya está reportado.
+        """
+        raiz, accesos = N.desarmar(lugar)
+        simbolo = self.resolver_variable(raiz.nombre, raiz, escritura=False)
+        tipo = simbolo.tipo if simbolo is not None and simbolo.clase not in SUBPROGRAMAS else None
+        en_texto = False
+        for acceso in accesos:
+            self.verificar_posicion(acceso.indice)
+            if tipo is None:
+                continue
+            elemento = elemento_de(tipo)
+            if elemento is None:
+                self.diag.error(f"no se puede usar [ ] sobre un {tipo}: {SIN_POSICIONES}",
+                                acceso.linea, acceso.col)
+                tipo = None
+                continue
+            en_texto = en_texto or not es_arreglo(tipo)
+            tipo = elemento
+        # Darle valor a una posición de un arreglo es darle valor a la variable: así es
+        # como se llena. En un texto no: el texto ya tiene que existir para cambiarle una
+        # letra, y así se conserva el aviso de "nunca recibe un valor" de 't[1] = 'a''.
+        if escritura and not en_texto and tipo is not None:
+            simbolo.asignado = True
+        return simbolo, tipo, en_texto
+
     def asignacion(self, s):
         operador = getattr(s, "operador_incremento", None)
         if operador is not None:
             self.incremento(s, operador)
             return
         nombre = s.nombre
+        if s.lugar is not None:
+            self.asignacion_por_posicion(s)
+            return
         if self.actual is not None and nombre == self.actual.nombre:
             tipo = self.tipo(s.expr)
             if not self.actual.es_funcion:
@@ -259,10 +317,7 @@ class Analizador:
                                      f"el valor que devuelve '{nombre}'")
             return
 
-        # Cambiar una posición no es darle su primer valor a la variable: el texto ya tiene
-        # que existir. Por eso cuenta como lectura, y así se conserva el aviso de "se usa
-        # pero nunca recibe un valor" para quien escriba t[1] = 'a' sin haber armado t.
-        simbolo = self.resolver_variable(nombre, s, escritura=not s.indices)
+        simbolo = self.resolver_variable(nombre, s, escritura=True)
         tipo = self.tipo(s.expr)
         if simbolo is None:
             return
@@ -275,25 +330,34 @@ class Analizador:
             self.diag.error(f"no se puede asignar a '{nombre}' porque es un procedimiento",
                             s.linea, s.col)
             return
-        if s.indices:
-            self.asignacion_por_posicion(s, simbolo, tipo)
+        if es_arreglo(simbolo.tipo):
+            self.diag.error(f"'{nombre}' es un {simbolo.tipo}: no se le da valor entero de una "
+                            f"vez, sino posición por posición (ej: {nombre}[1] = ...)",
+                            s.linea, s.col)
             return
         self.verificar_asignable(simbolo.tipo, tipo, s.expr, f"la variable '{nombre}'")
 
-    def asignacion_por_posicion(self, s, simbolo, tipo_del_valor):
-        """'texto[3] = 'S'': cambia una posición, no la variable entera."""
-        contenedor = simbolo.tipo
-        for indice in s.indices:
-            self.verificar_posicion(indice, s)
-            if contenedor is None:
-                return
-            if contenedor not in ELEMENTO_DE:
-                self.diag.error(f"no se puede usar [ ] sobre un {contenedor}: por ahora solo "
-                                "el texto tiene posiciones", s.linea, s.col)
-                return
-            contenedor = ELEMENTO_DE[contenedor]
-        self.verificar_asignable(contenedor, tipo_del_valor, s.expr,
-                                 f"la posición de '{s.nombre}'")
+    def asignacion_por_posicion(self, s):
+        """'notas[i] = 7', 'texto[3] = 'S'': cambia una posición, no la variable entera."""
+        simbolo, destino, _ = self.analizar_lugar(s.lugar, escritura=True)
+        tipo = self.tipo(s.expr)
+        if not self.lugar_valido(simbolo, s):
+            return
+        if es_arreglo(destino):
+            self.diag.error(f"esa posición de '{s.nombre}' es un {destino} entero: hay que "
+                            "indicar todas las posiciones (ej: m[i][j])", s.linea, s.col)
+            return
+        self.verificar_asignable(destino, tipo, s.expr, f"la posición de '{s.nombre}'")
+
+    def lugar_valido(self, simbolo, nodo):
+        """Que el nombre de un 'x[i] = ...' sea una variable y no una función."""
+        if simbolo is None:
+            return False
+        if simbolo.clase in SUBPROGRAMAS:
+            self.diag.error(f"no se puede usar [ ] sobre {articulo(simbolo.sub)} "
+                            f"'{simbolo.nombre}'", nodo.linea, nodo.col)
+            return False
+        return True
 
     def para(self, s):
         if s.inicializacion is not None:
@@ -305,16 +369,24 @@ class Analizador:
         self.bloque(s.cuerpo)
 
     def incremento(self, s, operador):
-        """'i++' o 'i--' (que el parser ya tradujo a 'i = i + 1')."""
-        simbolo = self.resolver_variable(s.nombre, s, escritura=True)
-        if simbolo is None:
-            return
+        """'i++', 'notas[i]--' (que el parser ya tradujo a 'i = i + 1')."""
+        if s.lugar is not None:
+            simbolo, tipo, _ = self.analizar_lugar(s.lugar, escritura=True)
+            if not self.lugar_valido(simbolo, s):
+                return
+            que = f"esa posición de '{s.nombre}'"
+        else:
+            simbolo = self.resolver_variable(s.nombre, s, escritura=True)
+            if simbolo is None:
+                return
+            if simbolo.clase in SUBPROGRAMAS:
+                self.diag.error(f"'{s.nombre}' no es una variable", s.linea, s.col)
+                return
+            tipo, que = simbolo.tipo, f"'{s.nombre}'"
         simbolo.leido = True
-        if simbolo.clase in SUBPROGRAMAS:
-            self.diag.error(f"'{s.nombre}' no es una variable", s.linea, s.col)
-        elif simbolo.tipo not in NUMERICOS:
-            self.diag.error(f"'{operador}' solo se aplica a números, pero '{s.nombre}' es "
-                            f"{simbolo.tipo}", s.linea, s.col)
+        if tipo is not None and tipo not in NUMERICOS:
+            self.diag.error(f"'{operador}' solo se aplica a números, pero {que} es {tipo}",
+                            s.linea, s.col)
 
     def condicion(self, condicion, instruccion):
         tipo = self.tipo(condicion)
@@ -351,8 +423,8 @@ class Analizador:
 
     def tipo_conversion(self, e):
         origen = self.tipo(e.expr)
-        # El intérprete lo necesita: en ejecución un Caracter y un String de una letra
-        # son iguales, pero Entero('7') y Entero("7") no dan lo mismo.
+        # El intérprete lo necesita: en ejecución un Caracter y un String de una letra son
+        # iguales, pero cada uno tiene sus propias reglas y sus propios mensajes de error.
         e.origen = origen
         if e.destino not in CONVERSIONES:
             self.diag.error(f"no se puede convertir a {e.escrito}: un {e.escrito} sale de una "
@@ -364,20 +436,22 @@ class Analizador:
     def tipo_indice(self, e):
         """Tipo de 'base[i]'. Devuelve el tipo del elemento, o None si no se puede."""
         base = self.tipo(e.base)
-        self.verificar_posicion(e.indice, e)
+        self.verificar_posicion(e.indice)
         if base is None:
             return None
-        if base not in ELEMENTO_DE:
-            self.diag.error(f"no se puede usar [ ] sobre un {base}: por ahora solo el texto "
-                            "tiene posiciones", e.linea, e.col)
-            return None
-        return ELEMENTO_DE[base]
+        elemento = elemento_de(base)
+        if elemento is None:
+            self.diag.error(f"no se puede usar [ ] sobre un {base}: {SIN_POSICIONES}",
+                            e.linea, e.col)
+        return elemento
 
-    def verificar_posicion(self, expr, nodo):
+    def verificar_posicion(self, expr):
+        # El error va en la posición misma, no en el nombre: en 'notas[i] += 1' la misma
+        # posición se revisa como destino y como valor, y así sale un solo aviso.
         tipo = self.tipo(expr)
         if tipo not in (None, "Entero"):
             self.diag.error(f"la posición entre corchetes tiene que ser un Entero, no un "
-                            f"{tipo}", nodo.linea, nodo.col)
+                            f"{tipo}", expr.linea, expr.col)
 
     def tipo_variable(self, e):
         simbolo = self.resolver_variable(e.nombre, e, escritura=False)
@@ -487,13 +561,21 @@ class Analizador:
                 self.verificar_asignable(p.tipo, self.tipo(a), a,
                                          f"el parámetro '{p.nombre}' de '{sub.nombre}'")
                 continue
-            if not isinstance(a, N.Variable):
+            if not N.es_lugar(a):
                 self.diag.error(f"el parámetro '{p.nombre}' de '{sub.nombre}' es por referencia "
                                 "(Ref): hay que pasarle una variable, no una expresión",
                                 a.linea, a.col)
                 self.tipo(a)
                 continue
-            simbolo = self.resolver_variable(a.nombre, a, escritura=True)
+            if isinstance(a, N.Variable):
+                simbolo = self.resolver_variable(a.nombre, a, escritura=True)
+                tipo = simbolo.tipo if simbolo is not None else None
+                en_texto, que = False, f"la variable '{a.nombre}'"
+            else:
+                # Una posición de un arreglo también es un lugar propio: notas[i] se puede
+                # pasar por Ref y el subprograma le cambia el valor a esa posición.
+                simbolo, tipo, en_texto = self.analizar_lugar(a, escritura=True)
+                que = "esa posición"
             if simbolo is None:
                 continue
             if simbolo.clase in SUBPROGRAMAS:
@@ -501,7 +583,12 @@ class Analizador:
                                 "(Ref): hay que pasarle una variable", a.linea, a.col)
                 continue
             simbolo.leido = True
-            if simbolo.tipo != p.tipo:
-                self.diag.error(f"el parámetro por referencia '{p.nombre}' es {p.tipo}, pero la "
-                                f"variable '{a.nombre}' es {simbolo.tipo}; con 'Ref' los tipos "
-                                "tienen que coincidir exactamente", a.linea, a.col)
+            if en_texto:
+                self.diag.error(f"el parámetro '{p.nombre}' de '{sub.nombre}' es por referencia "
+                                "(Ref): una letra de un texto no se puede pasar así; pasá el "
+                                "texto entero o guardá la letra en una variable",
+                                a.linea, a.col)
+            elif tipo is not None and tipo != p.tipo:
+                self.diag.error(f"el parámetro por referencia '{p.nombre}' es {p.tipo}, pero "
+                                f"{que} es {tipo}; con 'Ref' los tipos tienen que coincidir "
+                                "exactamente", a.linea, a.col)

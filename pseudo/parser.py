@@ -3,15 +3,17 @@
 Gramática (resumida):
 
     programa      := 'Programa' ID NL [bloque_var] subprograma* 'Inicio' NL sentencias 'Fin'
-    bloque_var    := 'Var' NL (ID {',' ID} TIPO NL)*
+    bloque_var    := 'Var' NL (declarado {',' declarado} TIPO NL)*
+    declarado     := ID {'[' ENTERO ']'}            -- 'notas[10]' es un arreglo de 10
     subprograma   := 'Funcion' ID '(' params ')' TIPO NL [bloque_var] 'Inicio' NL sentencias 'Fin'
                    | 'Procedimiento' ID '(' params ')' NL [bloque_var] 'Inicio' NL sentencias 'Fin'
-    params        := [ ['Ref'] ID TIPO {',' ['Ref'] ID TIPO} ]
-    sentencia     := asignacion | ID '(' args ')' | 'Mostrar' '(' args ')' | 'Leer' '(' ID {',' ID} ')'
+    params        := [ ['Ref'] declarado TIPO {',' ['Ref'] declarado TIPO} ]
+    sentencia     := asignacion | ID '(' args ')' | 'Mostrar' '(' args ')' | 'Leer' '(' lugar {',' lugar} ')'
                    | 'Si' '(' expr ')' ... {'Sino' 'Si' '(' expr ')' ...} ['Sino' ...] 'Fin' 'Si'
                    | 'Mientras' '(' expr ')' ... 'Fin' 'Mientras'
                    | 'Para' '(' asignacion ',' asignacion ',' expr ')' ... 'Fin' 'Para'
-    asignacion    := ID '=' expr | ID ('+=' | '-=' | '*=' | '/=' | '%=') expr | ID ('++' | '--')
+    asignacion    := lugar '=' expr | lugar ('+=' | '-=' | '*=' | '/=' | '%=') expr | lugar ('++' | '--')
+    lugar         := ID {'[' expr ']'}
 """
 from . import nodos as N
 from .diagnosticos import ErrorSintaxis
@@ -52,6 +54,10 @@ SUGERENCIAS_TIPO = {
 }
 TIPOS_TEXTO = ("Entero (o Int), Real (o Float), String (o Cadena), Logico (o Bool) "
                "o Caracter (o Char)")
+# Cómo se declaran los arreglos en otras notaciones: se reconoce para explicar la de acá.
+NOMBRES_DE_ARREGLO = {"arreglo", "array", "vector", "matriz", "dimension"}
+# Más que esto no entra en la memoria de la página (y nadie lo necesita en un ejercicio).
+MAX_ELEMENTOS = 1_000_000
 FORMA_PARA = "Para (i = 0, i++, i < 10)"
 MENSAJE_MAYUSCULAS = "las palabras reservadas distinguen mayúsculas y no llevan tilde"
 
@@ -251,22 +257,66 @@ class Parser:
         return declaraciones
 
     def parse_declaracion(self):
-        nombres = [self.esperar_id("un nombre de variable")]
+        nombres = [self.parse_declarado("un nombre de variable")]
         while self.es_op(","):
             self.avanzar()
-            nombres.append(self.esperar_id("un nombre de variable después de ','"))
+            nombres.append(self.parse_declarado("un nombre de variable después de ','"))
         if self.act.tipo in ("NL", "EOF"):
-            ultimo = nombres[-1].valor
+            ultimo = nombres[-1][0].valor
             raise self.error(f"falta el tipo de dato de '{ultimo}' (ej: '{ultimo} Entero')")
         tipo = self.parse_tipo()
+        self.rechazar_tamanio_en_el_tipo(nombres[-1][0])
         self.fin_linea()
-        return [N.DeclVar(t.linea, t.col, t.valor, tipo) for t in nombres]
+        return [N.DeclVar(t.linea, t.col, t.valor, N.tipo_arreglo(tipo, tamanios))
+                for t, tamanios in nombres]
+
+    def parse_declarado(self, que):
+        """Un nombre que se declara, con su tamaño si es un arreglo: 'edad', 'notas[10]'."""
+        nombre = self.esperar_id(que)
+        return nombre, self.parse_tamanios(nombre)
+
+    def parse_tamanios(self, nombre):
+        """Los '[10]' pegados al nombre en una declaración. Lista vacía si no es arreglo."""
+        tamanios = []
+        while self.es_op("["):
+            corchete = self.avanzar()
+            tok = self.act
+            if self.es_op("]"):
+                raise self.error(f"falta la cantidad de elementos entre los corchetes "
+                                 f"(ej: {nombre.valor}[10] Real)")
+            if tok.tipo != "ENTERO":
+                raise self.error(f"la cantidad de elementos de un arreglo tiene que ser un número "
+                                 f"fijo, como {nombre.valor}[10]: no puede ser una variable ni "
+                                 "una cuenta")
+            self.avanzar()
+            if tok.valor < 1:
+                raise self.error("un arreglo tiene que tener al menos un elemento", tok)
+            self.esperar_op("]", f"']' para cerrar el '[' de la columna {corchete.col}")
+            tamanios.append(tok.valor)
+
+        total = 1
+        for t in tamanios:
+            total *= t
+        if total > MAX_ELEMENTOS:
+            raise self.error(f"'{nombre.valor}' tendría {total:,} elementos; el máximo es "
+                             f"{MAX_ELEMENTOS:,}".replace(",", "."), nombre)
+        return tamanios
+
+    def rechazar_tamanio_en_el_tipo(self, nombre):
+        """'notas Real[10]': el tamaño se escribió del lado del tipo."""
+        if self.es_op("["):
+            raise self.error(f"el tamaño del arreglo va pegado al nombre, no al tipo "
+                             f"(ej: {nombre.valor}[10] Real)")
 
     def parse_tipo(self):
         tok = self.act
         if tok.tipo == "TIPO":
             self.avanzar()
             return CANONICO.get(tok.valor, tok.valor)
+        if tok.tipo == "ID" and normalizar(tok.valor) in NOMBRES_DE_ARREGLO:
+            raise self.error(f"no existe el tipo '{tok.valor}': un arreglo se declara con la "
+                             "cantidad de elementos pegada al nombre y el tipo de sus elementos "
+                             "al final (ej: notas[10] Real)")
         if tok.tipo == "ID" and normalizar(tok.valor) in SUGERENCIAS_TIPO:
             raise self.error(f"tipo de dato desconocido '{tok.valor}'; ¿quisiste decir "
                              f"'{SUGERENCIAS_TIPO[normalizar(tok.valor)]}'?")
@@ -295,12 +345,14 @@ class Parser:
                     # Sigue habiendo un nombre después, así que quiso escribir la palabra
                     # clave. Un parámetro que se llame 'ref' a secas es válido.
                     raise self.error(f"se escribe 'Ref' con mayúscula, no '{self.act.valor}'")
-                p = self.esperar_id("el nombre del parámetro")
+                p, tamanios = self.parse_declarado("el nombre del parámetro")
                 if self.es_op(","):
                     raise self.error("cada parámetro necesita su propio tipo "
                                      "(ej: '(a Entero, b Entero)')")
                 tipo = self.parse_tipo()
-                parametros.append(N.Parametro(p.linea, p.col, p.valor, tipo, ref))
+                self.rechazar_tamanio_en_el_tipo(p)
+                parametros.append(N.Parametro(p.linea, p.col, p.valor,
+                                              N.tipo_arreglo(tipo, tamanios), ref))
                 if not self.es_op(","):
                     break
                 self.avanzar()
@@ -312,6 +364,9 @@ class Parser:
                 raise self.error(f"falta el tipo de dato que devuelve la función "
                                  f"'{nombre.valor}' (va después del ')')")
             tipo_retorno = self.parse_tipo()
+            if self.es_op("["):
+                raise self.error("una función devuelve un solo valor, no un arreglo; para llenar "
+                                 "un arreglo usá un Procedimiento que lo reciba con Ref")
         elif self.act.tipo == "TIPO":
             raise self.error("un Procedimiento no devuelve ningún valor; si tiene que devolver "
                              f"un {self.act.valor}, usá 'Funcion'")
@@ -514,48 +569,34 @@ class Parser:
         if tok.tipo != "ID" or sig.tipo != "OP":
             return None
 
-        # Destino con posición: 'mi_texto[3] = 'S''. Los corchetes se guardan aparte del
-        # nombre para que el día que haya arreglos el destino ya esté representado.
-        if sig.valor == "[":
-            self.avanzar()
-            indices = []
-            while self.es_op("["):
-                corchete = self.avanzar()
-                indices.append(self.parse_expr())
-                self.esperar_op("]", f"']' para cerrar el '[' de la columna {corchete.col}")
-            if self.act.tipo == "OP" and (self.act.valor in ("++", "--")
-                                          or self.act.valor in COMPUESTOS):
-                raise self.error(f"'{self.act.valor}' no se puede usar sobre una posición; "
-                                 f"escribilo con '=' (ej: {tok.valor}[1] = 'a')")
-            self.esperar_op("=", "'=' para darle un valor a esa posición")
-            return N.Asignacion(tok.linea, tok.col, tok.valor, self.parse_expr(), indices)
-
+        if sig.valor not in ("=", "++", "--", "[") and sig.valor not in COMPUESTOS:
+            return None
+        self.avanzar()
+        # El destino: 'x', o una posición ('notas[i]', 'm[i][j]', 'texto[1]'). En el segundo
+        # caso se guarda entero en 'lugar', que es la misma expresión que lo lee.
         variable = N.Variable(tok.linea, tok.col, tok.valor)
+        lugar = self.parse_indices(variable) if self.es_op("[") else None
+        destino = lugar or variable
+        op = self.act
 
-        if sig.valor in ("++", "--"):
-            self.avanzar()
+        if self.es_op("++", "--"):
             self.avanzar()
             # i++ es lo mismo que i = i + 1
             uno = N.Literal(tok.linea, tok.col, 1, "Entero")
-            op = "+" if sig.valor == "++" else "-"
-            asignacion = N.Asignacion(tok.linea, tok.col, tok.valor,
-                                      N.Binaria(sig.linea, sig.col, op, variable, uno))
-            asignacion.operador_incremento = sig.valor
+            suma = N.Binaria(op.linea, op.col, "+" if op.valor == "++" else "-", destino, uno)
+            asignacion = N.Asignacion(tok.linea, tok.col, tok.valor, suma, lugar)
+            asignacion.operador_incremento = op.valor
             return asignacion
 
-        if sig.valor in COMPUESTOS:
-            self.avanzar()
+        if op.tipo == "OP" and op.valor in COMPUESTOS:
             self.avanzar()
             # total += x es lo mismo que total = total + x
-            expr = N.Binaria(sig.linea, sig.col, COMPUESTOS[sig.valor], variable, self.parse_expr())
-            expr.operador_compuesto = sig.valor   # para que los errores digan '+=' y no '+'
-            return N.Asignacion(tok.linea, tok.col, tok.valor, expr)
+            expr = N.Binaria(op.linea, op.col, COMPUESTOS[op.valor], destino, self.parse_expr())
+            expr.operador_compuesto = op.valor   # para que los errores digan '+=' y no '+'
+            return N.Asignacion(tok.linea, tok.col, tok.valor, expr, lugar)
 
-        if sig.valor == "=":
-            self.avanzar()
-            self.avanzar()
-            return N.Asignacion(tok.linea, tok.col, tok.valor, self.parse_expr())
-        return None
+        self.esperar_op("=", "'=' para darle un valor a esa posición" if lugar else "'='")
+        return N.Asignacion(tok.linea, tok.col, tok.valor, self.parse_expr(), lugar)
 
     def parse_argumentos(self, instruccion):
         if not self.es_op("("):
@@ -591,9 +632,10 @@ class Parser:
         if not args:
             raise self.error("Leer necesita al menos una variable: Leer(variable)", inicio)
         for a in args:
-            if not isinstance(a, N.Variable):
-                raise ErrorSintaxis("Leer(...) solo acepta nombres de variables; para mostrar un "
-                                    "mensaje usá Mostrar(...) antes", a.linea, a.col)
+            if not N.es_lugar(a):
+                raise ErrorSintaxis("Leer(...) solo acepta variables o posiciones de una variable "
+                                    "(ej: Leer(notas[i])); para mostrar un mensaje usá "
+                                    "Mostrar(...) antes", a.linea, a.col)
         self.fin_linea()
         return N.Leer(inicio.linea, inicio.col, args)
 
@@ -728,10 +770,10 @@ class Parser:
                             expr, tipo.valor)
 
     def parse_indices(self, base):
-        """Los '[...]' que vengan pegados: base[i], y más adelante base[i][j].
+        """Los '[...]' que vengan pegados: base[i], base[i][j].
 
-        Se encadenan acá y no en cada lugar donde aparece un nombre, para que agregar
-        arreglos no obligue a tocar el resto del parser.
+        Se encadenan acá y no en cada lugar donde aparece un nombre: lo mismo sirve para
+        leer una posición y para el destino de una asignación.
         """
         while self.es_op("["):
             corchete = self.avanzar()

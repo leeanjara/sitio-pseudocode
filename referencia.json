@@ -130,7 +130,25 @@
             "La posición puede ser cualquier expresión Entera: texto[i], texto[i + 1], texto[Len(texto)].",
             "Pedir una posición que no existe corta el programa y avisa cuántos caracteres tenía el texto.",
             "Cambiar una posición no sirve para darle su primer valor a la variable: el texto ya tiene que existir.",
-            "Por ahora solo el texto tiene posiciones; los arreglos todavía no están definidos en la materia."
+            "Los arreglos también tienen posiciones, con las mismas reglas: ver Arreglos."
+          ]
+        },
+        {
+          "id": "arreglos",
+          "titulo": "Arreglos: notas[10] Real",
+          "cubre": [],
+          "resumen": "Una variable con varias posiciones, todas del mismo tipo. La cantidad va entre corchetes pegada al nombre, y es fija.",
+          "sintaxis": "Var\n    <nombre>[<cantidad>] <Tipo>\n    <nombre>[<filas>][<columnas>] <Tipo>\n\n<nombre>[<posicion>] = <valor>",
+          "ejemplo": "Programa promedio_de_notas\nVar\n    notas[5] Real\n    suma Real\n    i Entero\nInicio\n    Para (i = 1, i++, i <= 5)\n        Mostrar(\"Nota \", i, \":\")\n        Leer(notas[i])\n    Fin Para\n\n    suma = 0\n    Para (i = 1, i++, i <= 5)\n        suma += notas[i]\n    Fin Para\n    Mostrar(\"Promedio: \", suma / 5)\nFin",
+          "notas": [
+            "La cantidad de elementos es un número fijo: notas[n] no vale, aunque n sea un Entero.",
+            "Las posiciones van de la 1 a la cantidad declarada, igual que en un texto. Pedir una que no existe corta el programa.",
+            "Cada posición se usa como una variable más: se le asigna un valor, se lee con Leer(notas[i]), se le aplica ++ o +=, y se puede pasar a un parámetro Ref.",
+            "Una posición que todavía no recibió un valor no se puede usar: corta el programa.",
+            "El arreglo entero no se asigna, no se muestra, no se lee ni se compara de una vez: se recorre posición por posición, normalmente con un Para.",
+            "Una matriz lleva dos cantidades: m[3][4] Entero tiene 3 filas de 4 posiciones, y m[2][1] es la fila 2, columna 1.",
+            "Para pasarlo a una función o procedimiento, el parámetro se declara igual: (valores[5] Real). El tamaño y el tipo tienen que coincidir. Sin Ref el subprograma trabaja sobre una copia; con Ref, lo que cambia le queda al arreglo de afuera.",
+            "Una función no devuelve un arreglo: para llenar uno, usá un Procedimiento que lo reciba con Ref."
           ]
         },
         {
@@ -178,13 +196,12 @@
           "notas": [
             "Experimental: la forma de escribirlo todavía no está confirmada en la materia.",
             "String(x) convierte cualquier valor a texto, igual que como lo mostraría Mostrar.",
-            "Entero(x): de un Real corta los decimales (7.9 da 7 y -7.9 da -7); de un texto lo lee como número (\"42\" da 42); de un Caracter da su código (Entero('A') da 65).",
+            "Entero(x): de un Real corta los decimales (7.9 da 7 y -7.9 da -7); de un texto lo lee como número (\"42\" da 42); de un Caracter que sea un dígito, ese dígito (Entero('7') da 7).",
             "Real(x): de un Entero, o de un texto con punto o coma (\"3.5\" o \"3,5\").",
-            "Caracter(x): de un Entero da el carácter con ese código (Caracter(65) da 'A'); de un texto de una sola letra, esa letra.",
-            "Ojo: Entero('7') da 55, el código del carácter 7. Para el valor del dígito, pasá por texto: Entero(String('7')) da 7.",
+            "Caracter(x): de un Entero de una sola cifra, ese dígito (Caracter(7) da '7'); de un texto de una sola letra, esa letra. Para números de más de una cifra, String(x).",
             "A Logico no se convierte: un Logico sale de una comparación.",
             "Se usa el mismo nombre de tipo que en el resto del programa: si declaraste con String, es String(x) y no Cadena(x). Los alias también sirven: Int(x), Float(x), Char(x).",
-            "Si el texto no es un número, o no existe un carácter con ese código, el programa se corta con un error que lo explica."
+            "Si el texto no es un número, o el número o el caracter no es un solo dígito, el programa se corta con un error que lo explica."
           ]
         }
       ]
@@ -218,6 +235,7 @@
           "ejemplo": "Programa sumar\nVar\n    a, b Entero\nInicio\n    Mostrar(\"Ingresá dos números\")\n    Leer(a, b)\n    Mostrar(\"La suma es \", a + b)\nFin",
           "notas": [
             "Con varias variables pide un dato para cada una, en orden.",
+            "También lee una posición de un arreglo: Leer(notas[i]).",
             "El dato tiene que corresponder al tipo: si la variable es Entero y escribís texto, da error.",
             "Conviene poner un Mostrar antes, para que quien use el programa sepa qué se le está pidiendo."
           ]
@@ -414,6 +432,7 @@
           "notas": [
             "Sin Ref, el subprograma trabaja sobre una copia y la variable de afuera no se entera.",
             "A un parámetro Ref hay que pasarle una variable, nunca un número ni una cuenta: a_metros(175.0) es un error.",
+            "También se le puede pasar una posición de un arreglo: a_metros(alturas[3]).",
             "El tipo tiene que coincidir exacto: a un Ref Real no se le puede pasar un Entero.",
             "Es la forma de que un procedimiento devuelva resultados."
           ]

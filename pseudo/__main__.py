@@ -100,16 +100,19 @@ def main(argv=None):
                     help="abre la página para escribir y ejecutar desde el navegador")
     ap.add_argument("--puerto", type=int, default=8000,
                     help="puerto del servidor de --web (por defecto 8000)")
-    ap.add_argument("--empaquetar", nargs="?", const="sitio", metavar="CARPETA",
-                    help="arma la carpeta lista para publicar la página (por defecto 'sitio')")
+    # const="" distingue "--empaquetar" solo (carpeta por defecto) de no pedirlo (None).
+    ap.add_argument("--empaquetar", nargs="?", const="", default=None, metavar="CARPETA",
+                    help="arma la página lista para publicar, en CARPETA (por defecto 'sitio' "
+                         "dentro del proyecto); si ya existe no la borra, solo reemplaza los "
+                         "archivos del sitio")
     args = ap.parse_args(argv)
 
     if args.web:
         from .servidor_web import servir
         return servir(args.puerto)
-    if args.empaquetar:
+    if args.empaquetar is not None:
         from .servidor_web import empaquetar
-        return empaquetar(args.empaquetar)
+        return empaquetar(args.empaquetar or None)
     if not args.archivos:
         ap.error("indicá al menos un archivo, o usá --web para abrir la página")
 

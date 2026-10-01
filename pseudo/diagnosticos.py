@@ -21,12 +21,20 @@ class ErrorSintaxis(Exception):
 class Diagnosticos:
     def __init__(self):
         self.lista = []
+        self._vistos = set()
+
+    def _sumar(self, diagnostico):
+        # Un mismo aviso en el mismo lugar se guarda una sola vez. Pasa, por ejemplo, con
+        # 'notas[i] += 1': la posición se revisa como destino y como valor que se suma.
+        if diagnostico not in self._vistos:
+            self._vistos.add(diagnostico)
+            self.lista.append(diagnostico)
 
     def error(self, mensaje, linea, col):
-        self.lista.append(Diagnostico("error", mensaje, linea, col))
+        self._sumar(Diagnostico("error", mensaje, linea, col))
 
     def advertencia(self, mensaje, linea, col):
-        self.lista.append(Diagnostico("advertencia", mensaje, linea, col))
+        self._sumar(Diagnostico("advertencia", mensaje, linea, col))
 
     def agregar(self, exc):
         self.error(exc.mensaje, exc.linea, exc.col)
@@ -40,5 +48,4 @@ class Diagnosticos:
         return [d for d in self.lista if d.nivel == "advertencia"]
 
     def ordenados(self):
-        unicos = dict.fromkeys(self.lista)
-        return sorted(unicos, key=lambda d: (d.linea, d.col))
+        return sorted(self.lista, key=lambda d: (d.linea, d.col))
