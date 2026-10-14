@@ -2,7 +2,7 @@
 import difflib
 
 from . import nodos as N
-from .lexer import PALABRAS_RESERVADAS, TIPOS, normalizar
+from .lexer import PALABRAS_RESERVADAS, TEMA_DE_TIPO, TIPOS, normalizar
 from .predefinidas import PREDEFINIDAS
 
 # Palabra reservada escrita de cualquier forma -> cómo se escribe de verdad. Sirve para
@@ -24,6 +24,8 @@ CONVERSIONES = {
 }
 COMPARADORES = {"==", "!=", "<", ">", "<=", ">="}
 SUBPROGRAMAS = ("funcion", "procedimiento")
+# El tema de la referencia (web/referencia.json) que explica cada condición.
+TEMA_DE_CONDICION = {"Si": "si", "Sino Si": "si", "Mientras": "mientras", "Para": "para"}
 SIN_POSICIONES = "solo los textos y los arreglos tienen posiciones"
 
 
@@ -46,6 +48,10 @@ def asignable(destino, origen):
 
 def articulo(sub):
     return "la función" if sub.es_funcion else "el procedimiento"
+
+
+def tema_de(sub):
+    return "funcion" if sub.es_funcion else "procedimiento"
 
 
 class Simbolo:
@@ -95,27 +101,28 @@ class Analizador:
         nodo = simbolo.nodo
         if simbolo.nombre in PREDEFINIDAS:
             self.diag.error(f"'{simbolo.nombre}' ya es una función predefinida del lenguaje; "
-                            "usá otro nombre", nodo.linea, nodo.col)
+                            "usá otro nombre", nodo.linea, nodo.col, tema="var")
             return
         if previo is not None:
             self.diag.error(f"'{simbolo.nombre}' ya fue declarado en la línea {previo.nodo.linea}",
-                            nodo.linea, nodo.col)
+                            nodo.linea, nodo.col, tema="var")
             return
         if not simbolo.nombre.isascii():
             self.diag.advertencia(f"el nombre '{simbolo.nombre}' tiene tildes o 'ñ'; conviene "
-                                  "evitarlas en los nombres", nodo.linea, nodo.col)
+                                  "evitarlas en los nombres", nodo.linea, nodo.col, tema="var")
         tabla[simbolo.nombre] = simbolo
 
     def declarar_local(self, simbolo):
         nodo = simbolo.nodo
         if simbolo.nombre == self.actual.nombre:
             self.diag.error(f"'{simbolo.nombre}' no puede llamarse igual que "
-                            f"{articulo(self.actual)} que lo contiene", nodo.linea, nodo.col)
+                            f"{articulo(self.actual)} que lo contiene", nodo.linea, nodo.col,
+                            tema_de(self.actual))
             return
         g = self.globales.get(simbolo.nombre)
         if g is not None and g.clase in SUBPROGRAMAS:
             self.diag.error(f"'{simbolo.nombre}' ya es el nombre de {articulo(g.sub)}",
-                            nodo.linea, nodo.col)
+                            nodo.linea, nodo.col, tema_de(g.sub))
             return
         self.declarar(self.locales, simbolo)
 
@@ -128,7 +135,7 @@ class Analizador:
             return self.predefinidas.get(nombre), False
         return s, self.locales is not None and s.clase == "variable"
 
-    def no_declarado(self, nombre, nodo, que):
+    def no_declarado(self, nombre, nodo, que, tema):
         clave = (self.actual.nombre if self.actual else None, nombre)
         if clave in self.no_declarados:
             return
@@ -139,7 +146,8 @@ class Analizador:
         reservada = RESERVADAS_POR_FORMA.get(normalizar(nombre))
         if reservada is not None and reservada != nombre:
             self.diag.error(f"'{nombre}' no es una variable: es la palabra reservada "
-                            f"'{reservada}', que se escribe así", nodo.linea, nodo.col)
+                            f"'{reservada}', que se escribe así", nodo.linea, nodo.col,
+                            tema="mayusculas")
             return
 
         visibles = list(self.globales) + list(self.locales or {}) + list(PREDEFINIDAS)
@@ -148,12 +156,12 @@ class Analizador:
         mensaje = f"{que} '{nombre}' no está declarada"
         if parecidos:
             mensaje += f"; ¿quisiste decir '{parecidos[0]}'?"
-        self.diag.error(mensaje, nodo.linea, nodo.col)
+        self.diag.error(mensaje, nodo.linea, nodo.col, tema)
 
     def resolver_variable(self, nombre, nodo, escritura):
         simbolo, global_en_sub = self.buscar(nombre)
         if simbolo is None:
-            self.no_declarado(nombre, nodo, "la variable")
+            self.no_declarado(nombre, nodo, "la variable", "var")
             return None
         if simbolo.clase in SUBPROGRAMAS:
             return simbolo
@@ -166,7 +174,7 @@ class Analizador:
             self.avisos_global.add(nombre)
             self.diag.advertencia(f"{articulo(self.actual)} '{self.actual.nombre}' usa la "
                                   f"variable global '{nombre}'; lo recomendable es pasarla como "
-                                  "parámetro", nodo.linea, nodo.col)
+                                  "parámetro", nodo.linea, nodo.col, tema_de(self.actual))
         return simbolo
 
     def reportar_sin_uso(self, simbolos):
@@ -174,15 +182,16 @@ class Analizador:
             n = s.nodo
             if s.clase == "variable" and not s.usado:
                 self.diag.advertencia(f"la variable '{s.nombre}' se declara pero nunca se usa",
-                                      n.linea, n.col)
+                                      n.linea, n.col, tema="var")
             elif s.clase == "variable" and s.leido and not s.asignado:
                 self.diag.advertencia(f"la variable '{s.nombre}' se usa pero nunca recibe un valor "
-                                      "(ni con una asignación ni con Leer)", n.linea, n.col)
+                                      "(ni con una asignación ni con Leer)", n.linea, n.col,
+                                      tema="var")
             elif s.clase == "parametro" and not s.usado:
                 self.diag.advertencia(f"el parámetro '{s.nombre}' no se usa", n.linea, n.col)
             elif s.clase in SUBPROGRAMAS and not s.usado:
                 self.diag.advertencia(f"{articulo(s.sub)} '{s.nombre}' se declara pero nunca se "
-                                      "llama", n.linea, n.col)
+                                      "llama", n.linea, n.col, tema_de(s.sub))
 
     # ----------------------------------------------------------- subprogramas
 
@@ -199,7 +208,8 @@ class Analizador:
 
         if sub.es_funcion and not self.asigna_retorno:
             self.diag.error(f"la función '{sub.nombre}' nunca devuelve un valor: falta asignar "
-                            f"'{sub.nombre} = ...' en su cuerpo", sub.linea, sub.col)
+                            f"'{sub.nombre} = ...' en su cuerpo", sub.linea, sub.col,
+                            tema="funcion")
         self.reportar_sin_uso(self.locales.values())
 
     # ------------------------------------------------------------- sentencias
@@ -209,7 +219,7 @@ class Analizador:
             # Después de un Retornar, lo que sigue en el mismo bloque no se ejecuta nunca.
             if isinstance(anterior, N.Retornar):
                 self.diag.advertencia("esta línea nunca se ejecuta: el 'Retornar' de arriba "
-                                      "ya termina la función", s.linea, s.col)
+                                      "ya termina la función", s.linea, s.col, tema="retornar")
             self.sentencia(s)
 
     def sentencia(self, s):
@@ -222,7 +232,7 @@ class Analizador:
                 if es_arreglo(self.tipo(a)):
                     self.diag.error("Mostrar no muestra un arreglo entero: hay que mostrar cada "
                                     "posición, por ejemplo recorriéndolo con un Para",
-                                    a.linea, a.col)
+                                    a.linea, a.col, tema="arreglos")
         elif isinstance(s, N.Leer):
             for v in s.variables:
                 self.leer(v)
@@ -244,11 +254,12 @@ class Analizador:
         tipo = self.tipo(s.expr)
         if self.actual is None:
             self.diag.error("'Retornar' solo va dentro de una función: el programa principal "
-                            "no devuelve nada", s.linea, s.col)
+                            "no devuelve nada", s.linea, s.col, tema="retornar")
             return
         if not self.actual.es_funcion:
             self.diag.error(f"el procedimiento '{self.actual.nombre}' no devuelve un valor: "
-                            "'Retornar' solo va dentro de una Funcion", s.linea, s.col)
+                            "'Retornar' solo va dentro de una Funcion", s.linea, s.col,
+                            tema="retornar")
             return
         self.asigna_retorno = True
         self.verificar_asignable(self.actual.tipo_retorno, tipo, s.expr,
@@ -262,11 +273,11 @@ class Analizador:
             simbolo, tipo, _ = self.analizar_lugar(lugar, escritura=True)
         if simbolo is not None and simbolo.clase in SUBPROGRAMAS:
             self.diag.error(f"Leer necesita una variable, pero '{simbolo.nombre}' es "
-                            f"{articulo(simbolo.sub)}", lugar.linea, lugar.col)
+                            f"{articulo(simbolo.sub)}", lugar.linea, lugar.col, tema="leer")
         elif es_arreglo(tipo):
             self.diag.error("Leer no lee un arreglo entero: hay que leer cada posición "
                             f"(ej: Leer({simbolo.nombre}[i]) dentro de un Para)",
-                            lugar.linea, lugar.col)
+                            lugar.linea, lugar.col, tema="arreglos")
 
     def analizar_lugar(self, lugar, escritura):
         """Una posición donde se guarda un valor: 'notas[i]', 'm[i][j]', 'texto[1]'.
@@ -285,7 +296,7 @@ class Analizador:
             elemento = elemento_de(tipo)
             if elemento is None:
                 self.diag.error(f"no se puede usar [ ] sobre un {tipo}: {SIN_POSICIONES}",
-                                acceso.linea, acceso.col)
+                                acceso.linea, acceso.col, tema="posiciones")
                 tipo = None
                 continue
             en_texto = en_texto or not es_arreglo(tipo)
@@ -310,7 +321,7 @@ class Analizador:
             tipo = self.tipo(s.expr)
             if not self.actual.es_funcion:
                 self.diag.error(f"un procedimiento no devuelve valor: no se puede asignar a "
-                                f"'{nombre}'", s.linea, s.col)
+                                f"'{nombre}'", s.linea, s.col, tema="procedimiento")
                 return
             self.asigna_retorno = True
             self.verificar_asignable(self.actual.tipo_retorno, tipo, s.expr,
@@ -324,16 +335,16 @@ class Analizador:
         if simbolo.clase == "funcion":
             self.diag.error(f"no se puede asignar a la función '{nombre}' desde afuera; su valor "
                             "de retorno solo se asigna dentro de la propia función",
-                            s.linea, s.col)
+                            s.linea, s.col, tema="funcion")
             return
         if simbolo.clase == "procedimiento":
             self.diag.error(f"no se puede asignar a '{nombre}' porque es un procedimiento",
-                            s.linea, s.col)
+                            s.linea, s.col, tema="procedimiento")
             return
         if es_arreglo(simbolo.tipo):
             self.diag.error(f"'{nombre}' es un {simbolo.tipo}: no se le da valor entero de una "
                             f"vez, sino posición por posición (ej: {nombre}[1] = ...)",
-                            s.linea, s.col)
+                            s.linea, s.col, tema="arreglos")
             return
         self.verificar_asignable(simbolo.tipo, tipo, s.expr, f"la variable '{nombre}'")
 
@@ -345,7 +356,8 @@ class Analizador:
             return
         if es_arreglo(destino):
             self.diag.error(f"esa posición de '{s.nombre}' es un {destino} entero: hay que "
-                            "indicar todas las posiciones (ej: m[i][j])", s.linea, s.col)
+                            "indicar todas las posiciones (ej: m[i][j])", s.linea, s.col,
+                            tema="arreglos")
             return
         self.verificar_asignable(destino, tipo, s.expr, f"la posición de '{s.nombre}'")
 
@@ -380,27 +392,36 @@ class Analizador:
             if simbolo is None:
                 return
             if simbolo.clase in SUBPROGRAMAS:
-                self.diag.error(f"'{s.nombre}' no es una variable", s.linea, s.col)
+                self.diag.error(f"'{s.nombre}' no es una variable", s.linea, s.col,
+                                tema="contadores")
                 return
             tipo, que = simbolo.tipo, f"'{s.nombre}'"
         simbolo.leido = True
         if tipo is not None and tipo not in NUMERICOS:
             self.diag.error(f"'{operador}' solo se aplica a números, pero {que} es {tipo}",
-                            s.linea, s.col)
+                            s.linea, s.col, tema="contadores")
 
     def condicion(self, condicion, instruccion):
         tipo = self.tipo(condicion)
         if tipo not in (None, "Logico"):
             self.diag.error(f"la condición del '{instruccion}' tiene que ser una comparación o una "
                             f"expresión lógica, pero es de tipo {tipo}",
-                            condicion.linea, condicion.col)
+                            condicion.linea, condicion.col, TEMA_DE_CONDICION[instruccion])
 
     def verificar_asignable(self, destino, origen, nodo, que):
         if asignable(destino, origen):
             return
         extra = " (se perdería la parte decimal)" if (destino, origen) == ("Entero", "Real") else ""
+        # Si se arregla convirtiendo (Entero(x), String(x)...), lo explica Conversiones; si
+        # no, el tema del tipo que se esperaba.
+        if es_arreglo(destino) or es_arreglo(origen):
+            tema = "arreglos"
+        elif origen in CONVERSIONES.get(destino, ()):
+            tema = "conversiones"
+        else:
+            tema = TEMA_DE_TIPO.get(destino)
         self.diag.error(f"{que} es {destino}, pero se le quiere dar un valor {origen}{extra}",
-                        nodo.linea, nodo.col)
+                        nodo.linea, nodo.col, tema)
 
     # ------------------------------------------------------------ expresiones
 
@@ -428,9 +449,10 @@ class Analizador:
         e.origen = origen
         if e.destino not in CONVERSIONES:
             self.diag.error(f"no se puede convertir a {e.escrito}: un {e.escrito} sale de una "
-                            "comparación (ej: edad >= 18)", e.linea, e.col)
+                            "comparación (ej: edad >= 18)", e.linea, e.col, tema="conversiones")
         elif origen is not None and origen not in CONVERSIONES[e.destino]:
-            self.diag.error(f"no se puede convertir un {origen} a {e.escrito}", e.linea, e.col)
+            self.diag.error(f"no se puede convertir un {origen} a {e.escrito}", e.linea, e.col,
+                            tema="conversiones")
         return e.destino
 
     def tipo_indice(self, e):
@@ -442,7 +464,7 @@ class Analizador:
         elemento = elemento_de(base)
         if elemento is None:
             self.diag.error(f"no se puede usar [ ] sobre un {base}: {SIN_POSICIONES}",
-                            e.linea, e.col)
+                            e.linea, e.col, tema="posiciones")
         return elemento
 
     def verificar_posicion(self, expr):
@@ -451,7 +473,7 @@ class Analizador:
         tipo = self.tipo(expr)
         if tipo not in (None, "Entero"):
             self.diag.error(f"la posición entre corchetes tiene que ser un Entero, no un "
-                            f"{tipo}", expr.linea, expr.col)
+                            f"{tipo}", expr.linea, expr.col, tema="posiciones")
 
     def tipo_variable(self, e):
         simbolo = self.resolver_variable(e.nombre, e, escritura=False)
@@ -461,13 +483,15 @@ class Analizador:
             if self.actual is simbolo.sub:
                 self.diag.error(f"dentro de la función, '{e.nombre}' solo se usa para asignarle el "
                                 "valor de retorno; para ir acumulando usá una variable local",
-                                e.linea, e.col)
+                                e.linea, e.col, tema="funcion")
             else:
                 self.diag.error(f"'{e.nombre}' es una función: para usarla hay que llamarla con "
-                                f"paréntesis, ej: {e.nombre}(...)", e.linea, e.col)
+                                f"paréntesis, ej: {e.nombre}(...)", e.linea, e.col,
+                                tema="funcion")
             return simbolo.tipo
         if simbolo.clase == "procedimiento":
-            self.diag.error(f"'{e.nombre}' es un procedimiento y no tiene un valor", e.linea, e.col)
+            self.diag.error(f"'{e.nombre}' es un procedimiento y no tiene un valor", e.linea, e.col,
+                            tema="procedimiento")
             return None
         return simbolo.tipo
 
@@ -476,11 +500,11 @@ class Analizador:
         if e.op == "!":
             if tipo not in (None, "Logico"):
                 self.diag.error(f"'!' se aplica a condiciones (Logico), no a un {tipo}",
-                                e.linea, e.col)
+                                e.linea, e.col, tema="logicos")
             return "Logico"
         if tipo not in (None, "Entero", "Real"):
             self.diag.error(f"el signo '{e.op}' solo se aplica a números, no a un {tipo}",
-                            e.linea, e.col)
+                            e.linea, e.col, tema="aritmeticos")
             return None
         return tipo
 
@@ -492,7 +516,7 @@ class Analizador:
             for tipo, lado in ((a, e.izq), (b, e.der)):
                 if tipo not in (None, "Logico"):
                     self.diag.error(f"'{op}' une condiciones (Logico), pero de este lado hay un "
-                                    f"{tipo}", lado.linea, lado.col)
+                                    f"{tipo}", lado.linea, lado.col, tema="logicos")
             return "Logico"
         if a is None or b is None:
             return "Logico" if op in COMPARADORES else None
@@ -502,16 +526,17 @@ class Analizador:
                       or (op in ("==", "!=") and a == b == "Logico"))
             if not valido:
                 self.diag.error(f"no se puede comparar un {a} con un {b} usando '{op}'",
-                                e.linea, e.col)
+                                e.linea, e.col, tema="comparacion")
             return "Logico"
         if op == "+" and a in TEXTO and b in TEXTO:
             return "String"
         # Si viene de 'x += 1' los mensajes hablan de '+=', que es lo que escribió el alumno.
         escrito = getattr(e, "operador_compuesto", op)
+        tema = "contadores" if escrito != op else "aritmeticos"
         if op == "%":
             if a != "Entero" or b != "Entero":
                 self.diag.error(f"el operador '{escrito}' (resto) solo funciona con Enteros, pero "
-                                f"acá hay {a} y {b}", e.linea, e.col)
+                                f"acá hay {a} y {b}", e.linea, e.col, tema)
             return "Entero"
         if a in NUMERICOS and b in NUMERICOS:
             return "Real" if "Real" in (a, b) else "Entero"
@@ -519,7 +544,8 @@ class Analizador:
         mensaje = f"no se puede usar '{escrito}' entre un {a} y un {b}"
         if escrito == "+" and (a in TEXTO or b in TEXTO):
             mensaje += "; para mostrar textos y números juntos separalos con comas en Mostrar(...)"
-        self.diag.error(mensaje, e.linea, e.col)
+            tema = "string"
+        self.diag.error(mensaje, e.linea, e.col, tema)
         return None
 
     def llamada(self, e, como_expresion):
@@ -527,7 +553,8 @@ class Analizador:
         if simbolo is None or simbolo.clase not in SUBPROGRAMAS:
             if simbolo is None:
                 que = "la función" if como_expresion else "el procedimiento"
-                self.no_declarado(e.nombre, e, que)
+                self.no_declarado(e.nombre, e, que,
+                                  "funcion" if como_expresion else "procedimiento")
             else:
                 self.diag.error(f"'{e.nombre}' es una variable, no una función ni un procedimiento",
                                 e.linea, e.col)
@@ -539,10 +566,11 @@ class Analizador:
         sub = simbolo.sub
         if como_expresion and not sub.es_funcion:
             self.diag.error(f"'{e.nombre}' es un procedimiento: no devuelve ningún valor, así que no "
-                            "se puede usar dentro de una expresión", e.linea, e.col)
+                            "se puede usar dentro de una expresión", e.linea, e.col,
+                            tema="procedimiento")
         if not como_expresion and sub.es_funcion:
             self.diag.advertencia(f"se llama a la función '{e.nombre}' pero se descarta el valor "
-                                  "que devuelve", e.linea, e.col)
+                                  "que devuelve", e.linea, e.col, tema="funcion")
         self.verificar_argumentos(e, sub)
         return sub.tipo_retorno
 
@@ -551,7 +579,7 @@ class Analizador:
         if esperados != recibidos:
             self.diag.error(f"{articulo(sub)} '{sub.nombre}' espera {esperados} "
                             f"argumento{'s' if esperados != 1 else ''} pero recibe {recibidos}",
-                            e.linea, e.col)
+                            e.linea, e.col, tema_de(sub))
             for a in e.args:
                 self.tipo(a)
             return
@@ -564,7 +592,7 @@ class Analizador:
             if not N.es_lugar(a):
                 self.diag.error(f"el parámetro '{p.nombre}' de '{sub.nombre}' es por referencia "
                                 "(Ref): hay que pasarle una variable, no una expresión",
-                                a.linea, a.col)
+                                a.linea, a.col, tema="ref")
                 self.tipo(a)
                 continue
             if isinstance(a, N.Variable):
@@ -580,15 +608,16 @@ class Analizador:
                 continue
             if simbolo.clase in SUBPROGRAMAS:
                 self.diag.error(f"el parámetro '{p.nombre}' de '{sub.nombre}' es por referencia "
-                                "(Ref): hay que pasarle una variable", a.linea, a.col)
+                                "(Ref): hay que pasarle una variable", a.linea, a.col,
+                                tema="ref")
                 continue
             simbolo.leido = True
             if en_texto:
                 self.diag.error(f"el parámetro '{p.nombre}' de '{sub.nombre}' es por referencia "
                                 "(Ref): una letra de un texto no se puede pasar así; pasá el "
                                 "texto entero o guardá la letra en una variable",
-                                a.linea, a.col)
+                                a.linea, a.col, tema="ref")
             elif tipo is not None and tipo != p.tipo:
                 self.diag.error(f"el parámetro por referencia '{p.nombre}' es {p.tipo}, pero "
                                 f"{que} es {tipo}; con 'Ref' los tipos tienen que coincidir "
-                                "exactamente", a.linea, a.col)
+                                "exactamente", a.linea, a.col, tema="ref")

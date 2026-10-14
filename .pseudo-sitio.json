@@ -5,6 +5,7 @@
  "ayuda.js",
  "coi.js",
  "estilo.css",
+ "icono.svg",
  "index.html",
  "pseudo/__init__.py",
  "pseudo/__main__.py",
@@ -20,5 +21,6 @@
  "pseudo/servidor_web.py",
  "puente.py",
  "referencia.json",
+ "version.json",
  "worker.js"
 ]

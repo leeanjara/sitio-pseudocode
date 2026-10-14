@@ -10,6 +10,7 @@ y no necesitan tener Python instalado.
 import http.server
 import json
 import shutil
+import subprocess
 import tempfile
 import webbrowser
 from pathlib import Path
@@ -74,7 +75,82 @@ REGISTRO = ".pseudo-sitio.json"
 CARPETA_POR_DEFECTO = RAIZ / "sitio"
 
 
-def _armar(carpeta):
+# ---------------------------------------------------------------- git
+
+def _git(*args):
+    """Corre git sobre el proyecto y devuelve lo que imprime. Falla con RuntimeError."""
+    try:
+        r = subprocess.run(["git", "-C", str(RAIZ), *args], capture_output=True, text=True,
+                           encoding="utf-8", errors="replace")
+    except OSError as e:
+        raise RuntimeError("git no está instalado") from e
+    if r.returncode != 0:
+        raise RuntimeError(r.stderr.strip() or f"git {' '.join(args)} falló")
+    # rstrip y no strip: en 'git status --porcelain' el espacio del principio es parte del
+    # formato (" M archivo"), y comérselo corre las columnas.
+    return r.stdout.rstrip()
+
+
+def _plural(n, singular, plural):
+    return f"{n} {singular if n == 1 else plural}"
+
+
+def revisar_para_publicar():
+    """¿Lo que se va a publicar es exactamente lo que está guardado y subido a main?
+
+    Devuelve (problemas, avisos, version). Los problemas frenan el empaquetado, salvo que
+    se fuerce; los avisos solo se muestran. El caso que se quiere evitar: publicar desde
+    una computadora algo que no está subido, y que después se pise al publicar desde otra.
+    """
+    problemas, avisos = [], []
+    try:
+        rama = _git("rev-parse", "--abbrev-ref", "HEAD")
+    except RuntimeError:
+        avisos.append("el proyecto no está en un repositorio de git (o git no está instalado): "
+                      "no se pudo comprobar qué versión se publica")
+        return problemas, avisos, None
+
+    if rama != "main":
+        problemas.append(f"estás en la rama '{rama}', no en main: se publicaría esa versión")
+
+    # Solo importa lo que va al sitio: un cambio en el README no altera la página.
+    sucios = _git("status", "--porcelain", "--", "pseudo", "web").splitlines()
+    if sucios:
+        lista = ", ".join(linea[3:] for linea in sucios[:4]) + (" ..." if len(sucios) > 4 else "")
+        problemas.append(f"hay cambios sin commitear en pseudo/ o web/ ({lista}): lo "
+                         "publicado no quedaría guardado en ningún commit")
+
+    try:
+        _git("fetch", "--quiet")
+    except RuntimeError:
+        avisos.append("no se pudo consultar el remoto (¿sin conexión?): no se comprobó si hay "
+                      "cambios sin subir o sin bajar")
+    try:
+        _git("rev-parse", "--abbrev-ref", "@{u}")
+    except RuntimeError:
+        problemas.append(f"la rama '{rama}' no está subida al remoto (git push)")
+    else:
+        adelante = int(_git("rev-list", "--count", "@{u}..HEAD"))
+        atras = int(_git("rev-list", "--count", "HEAD..@{u}"))
+        if adelante:
+            problemas.append(f"hay {_plural(adelante, 'commit', 'commits')} sin subir (git push)")
+        if atras:
+            problemas.append(f"el remoto tiene {_plural(atras, 'commit', 'commits')} que no "
+                             "tenés: podrías pisar una versión más nueva publicada desde otra "
+                             "computadora (git pull)")
+
+    version = {
+        "commit": _git("rev-parse", "--short", "HEAD"),
+        "fecha": _git("log", "-1", "--format=%cs"),
+        "rama": rama,
+        "sin_commitear": bool(sucios),
+    }
+    return problemas, avisos, version
+
+
+# ------------------------------------------------------------- armado
+
+def _armar(carpeta, version=None):
     """Arma el sitio completo en una carpeta vacía."""
     sin_cache = shutil.ignore_patterns("__pycache__", "*.pyc")
     shutil.copytree(RAIZ / "web", carpeta, dirs_exist_ok=True, ignore=sin_cache)
@@ -84,6 +160,9 @@ def _armar(carpeta):
     # Sin esto, GitHub Pages pasa el sitio por Jekyll, que no publica los archivos que
     # empiezan con guion bajo: __init__.py y __main__.py darían 404 y la página no carga.
     (carpeta / ".nojekyll").write_text("", encoding="utf-8")
+    # La página lo muestra, para saber de qué versión salió lo que está publicado.
+    if version is not None:
+        (carpeta / "version.json").write_text(json.dumps(version), encoding="utf-8")
 
 
 def _leer_registro(salida):
@@ -101,7 +180,7 @@ def _leer_registro(salida):
             and salida in (salida / r).resolve().parents}
 
 
-def empaquetar(destino=None):
+def empaquetar(destino=None, forzar=False):
     """Arma la página lista para subir a cualquier hosting estático.
 
     Queda index.html en la raíz y pseudo/ adentro, así no depende de dónde se publique.
@@ -109,6 +188,9 @@ def empaquetar(destino=None):
     elimina los que había generado una corrida anterior y ya no van. Así se puede apuntar
     directo a la carpeta de otro repositorio (el de GitHub Pages) sin tocar su .git ni
     nada que no sea del sitio.
+
+    Antes de armar nada revisa con git que lo publicado esté commiteado y subido a main
+    (ver revisar_para_publicar); con forzar=True esos problemas pasan a ser avisos.
     """
     salida = CARPETA_POR_DEFECTO if destino is None else Path(destino).expanduser().resolve()
     fuentes = (RAIZ / "pseudo", RAIZ / "web")
@@ -120,12 +202,22 @@ def empaquetar(destino=None):
         print(f"{salida} existe y no es una carpeta.")
         return 1
 
+    problemas, avisos, version = revisar_para_publicar()
+    if problemas and not forzar:
+        print("No se armó el sitio:")
+        for p in problemas:
+            print(f"  - {p}")
+        print("Resolvelo y volvé a correrlo, o agregá --forzar si igual querés armarlo.")
+        return 1
+    for a in (problemas if forzar else []) + avisos:
+        print(f"Aviso: {a}")
+
     anteriores = _leer_registro(salida) if salida.exists() else None
     ajena = anteriores is None and salida.exists() and any(salida.iterdir())
 
     with tempfile.TemporaryDirectory() as temporal:
         armado = Path(temporal)
-        _armar(armado)
+        _armar(armado, version)
         nuevos = sorted(p.relative_to(armado).as_posix()
                         for p in armado.rglob("*") if p.is_file())
 

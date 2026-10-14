@@ -105,6 +105,9 @@ def main(argv=None):
                     help="arma la página lista para publicar, en CARPETA (por defecto 'sitio' "
                          "dentro del proyecto); si ya existe no la borra, solo reemplaza los "
                          "archivos del sitio")
+    ap.add_argument("--forzar", action="store_true",
+                    help="con --empaquetar, arma el sitio aunque haya cambios sin commitear o "
+                         "sin subir, o no se esté en main")
     args = ap.parse_args(argv)
 
     if args.web:
@@ -112,7 +115,7 @@ def main(argv=None):
         return servir(args.puerto)
     if args.empaquetar is not None:
         from .servidor_web import empaquetar
-        return empaquetar(args.empaquetar or None)
+        return empaquetar(args.empaquetar or None, forzar=args.forzar)
     if not args.archivos:
         ap.error("indicá al menos un archivo, o usá --web para abrir la página")
 

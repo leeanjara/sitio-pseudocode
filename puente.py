@@ -16,7 +16,9 @@ from pseudo.predefinidas import PREDEFINIDAS
 
 
 def _como_dict(d):
-    return {"nivel": d.nivel, "mensaje": d.mensaje, "linea": d.linea, "col": d.col}
+    # tema: qué parte de la referencia lo explica (puede ser None).
+    return {"nivel": d.nivel, "mensaje": d.mensaje, "linea": d.linea, "col": d.col,
+            "tema": d.tema}
 
 
 def vocabulario():
@@ -67,5 +69,5 @@ def ejecutar_fuente(fuente, pedir_entrada, emitir, max_pasos):
         interprete.ejecutar()
     except ErrorEjecucion as e:
         return json.dumps({**informe, "estado": "error_ejecucion", "mensaje": e.mensaje,
-                           "linea": e.linea, "col": e.col})
+                           "linea": e.linea, "col": e.col, "tema": e.tema})
     return json.dumps({**informe, "estado": "ok", "pasos": interprete.pasos})

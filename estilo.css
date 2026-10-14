@@ -10,6 +10,13 @@
   --bien: #1a7f4b;
   --consola-fondo: #1e222a;
   --consola-texto: #e6e8ec;
+  --ejecutar: #15803d;          /* verde oscuro: con texto blanco se lee bien (5:1) */
+  --tenue-hover: rgba(127, 127, 127, 0.12);
+  --tooltip: #1c1f24;
+  --tooltip-texto: #f3f4f6;
+  --acento-suave: rgba(37, 99, 235, 0.1);     /* la categoría activa de la referencia */
+  --realce: #f1f3f7;                          /* el recuadro "Recordá" */
+  --resaltado: rgba(250, 204, 21, 0.4);       /* lo encontrado al buscar */
   --mono: ui-monospace, "Cascadia Code", "Consolas", "SF Mono", monospace;
 }
 
@@ -35,10 +42,21 @@
     --aviso: #e3b341;
     --bien: #56d364;
     --consola-fondo: #0f1216;
+    --tenue-hover: rgba(255, 255, 255, 0.08);
+    --tooltip: #2e343d;
+    --tooltip-texto: #f3f4f6;
+    --acento-suave: rgba(110, 168, 254, 0.16);
+    --realce: #242a33;
+    --resaltado: rgba(227, 179, 65, 0.3);
   }
 }
 
 * { box-sizing: border-box; }
+
+/* Que 'hidden' oculte siempre. Sin esto, cualquier regla con 'display' le gana al
+   'display: none' que pone el navegador: ya pasó dos veces (la Referencia no cerraba, y
+   el botón Detener se veía siempre). */
+[hidden] { display: none !important; }
 
 body {
   margin: 0;
@@ -61,14 +79,129 @@ body {
   border-bottom: 1px solid var(--borde);
 }
 
+.logo {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  margin-right: 6px;
+}
+.logo img { display: block; flex-shrink: 0; }
+
 .barra h1 {
   margin: 0;
-  font-size: 16px;
-  font-weight: 600;
-  letter-spacing: -0.01em;
+  font-size: 17px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  line-height: 1.15;
 }
 
-.acciones { display: flex; gap: 8px; }
+.bajada {
+  margin: 1px 0 0;
+  font-size: 12px;
+  color: var(--suave);
+  white-space: nowrap;
+}
+
+/* La barra queda por encima del tablero para que los tooltips no queden tapados. */
+.barra { position: relative; z-index: 5; }
+
+.grupo { display: flex; align-items: center; gap: 4px; }
+
+.separador {
+  flex-shrink: 0;
+  width: 1px;
+  height: 24px;
+  background: var(--borde);
+}
+
+.barra button {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.icono {
+  flex-shrink: 0;
+  width: 17px;
+  height: 17px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+/* Ejecutar: la acción principal, en verde y sola. */
+button.principal {
+  padding: 8px 18px 8px 14px;
+  font-weight: 600;
+  background: var(--ejecutar);
+}
+
+button.detener {
+  padding: 8px 18px 8px 14px;
+  font-weight: 600;
+  background: transparent;
+  color: var(--error);
+  border-color: var(--error);
+}
+
+/* Nuevo, Abrir, Guardar y Referencia: en segundo plano hasta que se los busca. */
+button.tenue {
+  padding: 7px 11px;
+  background: transparent;
+  color: var(--texto);
+}
+button.tenue:hover:not(:disabled) {
+  filter: none;
+  background: var(--tenue-hover);
+}
+
+/* Guardar y Descargar comparten botón; se ve el ícono que corresponde. */
+#btn-guardar .icono-descargar { display: none; }
+#btn-guardar.descarga .icono-descargar { display: block; }
+#btn-guardar.descarga .icono-guardar { display: none; }
+
+/* Tooltips: qué hace cada botón y su atajo. Solo con mouse: en una pantalla táctil
+   quedarían pegados después de tocar el botón. */
+@media (hover: hover) {
+  [data-ayuda] { position: relative; }
+  [data-ayuda]::after {
+    content: attr(data-ayuda);
+    position: absolute;
+    top: calc(100% + 9px);
+    left: 50%;
+    z-index: 40;
+    width: max-content;
+    max-width: 250px;
+    padding: 7px 10px;
+    border-radius: 7px;
+    background: var(--tooltip);
+    color: var(--tooltip-texto);
+    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.25);
+    font-size: 12.5px;
+    font-weight: 400;
+    line-height: 1.45;
+    text-align: left;
+    white-space: pre-line;      /* el atajo va en un renglón aparte */
+    pointer-events: none;
+    opacity: 0;
+    visibility: hidden;
+    transform: translate(-50%, -4px);
+    transition: opacity 0.12s, transform 0.12s, visibility 0.12s;
+  }
+  [data-ayuda]:hover::after,
+  [data-ayuda]:focus-visible::after {
+    opacity: 1;
+    visibility: visible;
+    transform: translate(-50%, 0);
+    transition-delay: 0.35s;    /* que no aparezca con solo pasar el mouse por encima */
+  }
+  /* El último botón está contra el borde: su tooltip se abre hacia la izquierda. */
+  [data-ayuda-lado="izquierda"]::after { left: auto; right: 0; transform: translateY(-4px); }
+  [data-ayuda-lado="izquierda"]:hover::after,
+  [data-ayuda-lado="izquierda"]:focus-visible::after { transform: none; }
+}
 
 button {
   font: inherit;
@@ -83,12 +216,6 @@ button {
 }
 button:hover:not(:disabled) { filter: brightness(1.08); }
 button:disabled { opacity: 0.45; cursor: default; }
-
-button.secundario {
-  background: transparent;
-  color: var(--texto);
-  border-color: var(--borde);
-}
 
 button.enlace {
   background: none;
@@ -150,6 +277,17 @@ button.enlace:hover { color: var(--acento); }
 .titulo-panel .enlace { margin-left: auto; }
 
 .resumen { margin-left: auto; font-size: 13px; color: var(--suave); }
+
+/* El archivo abierto, al lado de "Tu programa". El punto marca cambios sin guardar. */
+.archivo {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: var(--mono);
+  font-size: 12px;
+  color: var(--suave);
+}
 .resumen.bien { color: var(--bien); }
 .resumen.aviso { color: var(--aviso); }
 .resumen.mal { color: var(--error); }
@@ -272,6 +410,26 @@ button.enlace:hover { color: var(--acento); }
 .diagnostico.error .donde { color: var(--error); }
 .diagnostico.advertencia .donde { color: var(--aviso); }
 
+/* Un diagnóstico con un tema de la Referencia que lo explica: el libro va a la derecha. */
+.fila-diagnostico { display: flex; border-bottom: 1px solid var(--borde); }
+.fila-diagnostico .diagnostico { flex: 1; min-width: 0; border-bottom: none; }
+button.diagnostico-ayuda {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  padding: 0 12px;
+  color: var(--suave);
+  background: none;
+  border: none;
+  border-radius: 0;
+}
+button.diagnostico-ayuda:hover:not(:disabled) {
+  filter: none;
+  color: var(--acento);
+  background: rgba(127, 127, 127, 0.09);
+}
+.diagnostico-ayuda .icono { width: 16px; height: 16px; }
+
 /* --------------------------------------------------------- consola */
 
 .consola {
@@ -304,6 +462,17 @@ button.enlace:hover { color: var(--acento); }
 .linea.aviso { color: #e3b341; }
 .linea.fin { color: #56d364; }
 .linea.eco { color: #7ee787; }
+
+/* "Ver en la Referencia", después de un error de ejecución. */
+button.consola-ayuda {
+  padding: 0;
+  font: inherit;
+  color: #6ea8fe;
+  background: none;
+  border: none;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
 
 .linea.entrada { display: flex; align-items: center; gap: 8px; }
 .linea.entrada .flecha { color: #56d364; font-weight: 700; }
@@ -374,7 +543,11 @@ button.enlace:hover { color: var(--acento); }
   display: flex;
   flex-direction: column;
   width: min(1100px, 100%);
-  max-height: 100%;
+  /* Sin esto, una línea larga de un ejemplo ensancha el panel más allá de la pantalla
+     (un ítem flex no se achica por debajo de su contenido salvo que se le diga). */
+  min-width: 0;
+  /* Alto fijo: si siguiera al contenido, el panel saltaría al cambiar de categoría. */
+  height: min(820px, 100%);
   margin: auto;
   overflow: hidden;
   background: var(--papel);
@@ -383,44 +556,89 @@ button.enlace:hover { color: var(--acento); }
   box-shadow: 0 20px 60px rgba(0, 0, 0, 0.35);
 }
 
+/* Los botones del panel no llevan el fondo de color de los botones comunes. */
+.ayuda-caja button {
+  font-weight: 400;
+  color: var(--suave);
+  background: none;
+  border: none;
+}
+.ayuda-caja button:hover:not(:disabled) { filter: none; color: var(--texto); }
+
+/* --- encabezado y buscador */
+
 .ayuda-cabecera {
   display: flex;
   align-items: center;
   gap: 12px;
   flex-shrink: 0;
-  padding: 12px 16px;
+  padding: 14px 14px 0 20px;
+}
+
+.ayuda-titulo {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 0;
+  font-size: 18px;
+  font-weight: 600;
+}
+.ayuda-titulo .icono { width: 20px; height: 20px; color: var(--acento); }
+
+.ayuda-subtitulo { margin-left: auto; font-size: 13.5px; color: var(--suave); }
+
+.ayuda-caja .ayuda-cerrar { display: flex; padding: 6px; border-radius: 7px; }
+.ayuda-caja .ayuda-cerrar:hover:not(:disabled) { background: var(--tenue-hover); }
+.ayuda-cerrar .icono { width: 18px; height: 18px; }
+
+.ayuda-busqueda {
+  flex-shrink: 0;
+  padding: 12px 16px 16px;
   border-bottom: 1px solid var(--borde);
 }
 
-.ayuda-cabecera h2 {
-  margin: 0;
-  font-size: 15px;
-  font-weight: 600;
-  white-space: nowrap;
+.ayuda-campo {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 0 12px 0 14px;
+  background: var(--fondo);
+  border: 1px solid var(--borde);
+  border-radius: 9px;
+  cursor: text;
 }
+.ayuda-campo:focus-within { border-color: var(--acento); box-shadow: 0 0 0 1px var(--acento); }
+.ayuda-campo > .icono { width: 18px; height: 18px; color: var(--suave); }
 
 .ayuda-buscador {
   flex: 1;
   min-width: 0;
+  padding: 12px 0;
   font: inherit;
-  font-size: 14px;
-  padding: 7px 12px;
-  color: var(--texto);
-  background: var(--fondo);
-  border: 1px solid var(--borde);
-  border-radius: 7px;
-}
-.ayuda-buscador:focus { outline: 2px solid var(--acento); outline-offset: -1px; }
-
-.ayuda-cerrar {
-  flex-shrink: 0;
-  padding: 2px 10px;
-  font-size: 20px;
-  line-height: 1.2;
+  font-size: 16px;            /* con menos, los celulares agrandan la página al escribir */
   color: var(--texto);
   background: none;
-  border: 1px solid var(--borde);
+  border: none;
+  outline: none;
 }
+.ayuda-buscador::placeholder { color: var(--suave); }
+
+.ayuda-caja .ayuda-borrar { padding: 3px 8px; font-size: 12.5px; border-radius: 6px; }
+.ayuda-caja .ayuda-borrar:hover:not(:disabled) { background: var(--tenue-hover); }
+
+.ayuda-tecla {
+  padding: 1px 6px;
+  font-family: var(--mono);
+  font-size: 11.5px;
+  color: var(--suave);
+  border: 1px solid var(--borde);
+  border-radius: 4px;
+}
+
+/* La lista de categorías para pantallas angostas: acá no se ve. */
+.ayuda-selector { display: none; }
+
+/* --- categorías */
 
 .ayuda-cuerpo {
   display: flex;
@@ -430,122 +648,397 @@ button.enlace:hover { color: var(--acento); }
 
 .ayuda-indice {
   flex-shrink: 0;
-  width: 220px;
-  padding: 14px 8px 14px 16px;
+  width: 240px;
+  padding: 16px 12px;
   overflow-y: auto;
+  background: var(--fondo);
   border-right: 1px solid var(--borde);
 }
+.ayuda-indice ul { margin: 0; padding: 0; list-style: none; }
 
-.ayuda-grupo { margin-bottom: 14px; }
+.ayuda-grupo + .ayuda-grupo {
+  margin-top: 14px;
+  padding-top: 14px;
+  border-top: 1px solid var(--borde);
+}
 
 .ayuda-grupo-titulo {
-  margin: 0 0 4px;
+  margin: 0 0 6px;
+  padding: 0 10px;
   font-size: 11px;
   font-weight: 700;
   text-transform: uppercase;
-  letter-spacing: 0.06em;
+  letter-spacing: 0.07em;
   color: var(--suave);
 }
 
-.ayuda-indice a {
+.ayuda-caja .ayuda-categoria {
   display: block;
-  padding: 3px 8px;
-  font-size: 13.5px;
+  width: 100%;
+  padding: 7px 10px;
+  text-align: left;
+  font-size: 14px;
   color: var(--texto);
+  border-radius: 7px;
+}
+.ayuda-caja .ayuda-categoria:hover:not(:disabled) { background: var(--tenue-hover); }
+.ayuda-caja .ayuda-categoria.activa,
+.ayuda-caja .ayuda-categoria.activa:hover:not(:disabled) {
+  font-weight: 500;
+  color: var(--acento);
+  background: var(--acento-suave);
+}
+
+.ayuda-indice .ayuda-temas {
+  margin: 2px 0 6px 14px;
+  padding-left: 8px;
+  border-left: 1px solid var(--borde);
+}
+.ayuda-temas a {
+  display: block;
+  padding: 4px 8px;
+  font-size: 13.5px;
+  color: var(--suave);
   text-decoration: none;
   border-radius: 5px;
 }
-.ayuda-indice a:hover { background: rgba(127, 127, 127, 0.12); color: var(--acento); }
+.ayuda-temas a:hover { color: var(--texto); background: var(--tenue-hover); }
+.ayuda-temas a.actual { color: var(--acento); font-weight: 600; }
+
+/* --- contenido */
 
 .ayuda-contenido {
   flex: 1;
   min-width: 0;
-  padding: 18px 24px 60px;
+  padding: 22px 32px 40px;
   overflow-y: auto;
 }
 
-.ayuda-bajada {
-  margin: 0 0 20px;
-  font-size: 14px;
-  line-height: 1.6;
-  color: var(--suave);
-}
-
-.ayuda-seccion > h2 {
-  margin: 28px 0 4px;
-  padding-bottom: 6px;
+.ayuda-categoria-titulo {
+  margin: 0 0 4px;
   font-size: 12px;
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.07em;
   color: var(--suave);
-  border-bottom: 1px solid var(--borde);
 }
-.ayuda-seccion:first-of-type > h2 { margin-top: 0; }
 
-.ayuda-tema { padding: 18px 0; border-bottom: 1px solid var(--borde); }
-.ayuda-tema:last-child { border-bottom: none; }
+/* El margen negativo deja lugar para el resaltado al llegar desde una búsqueda. */
+.ayuda-tema {
+  margin: 0 -14px;
+  padding: 14px 14px 28px;
+  border-bottom: 1px solid var(--borde);
+  border-radius: 8px 8px 0 0;
+}
+.ayuda-tema + .ayuda-tema { padding-top: 26px; }
+.ayuda-tema:last-of-type { border-bottom: none; }
+
+@keyframes ayuda-destacar {
+  from { background: var(--acento-suave); }
+  to { background: transparent; }
+}
+.ayuda-tema.destacado { animation: ayuda-destacar 1.6s ease-out; }
 
 .ayuda-tema h3 {
-  margin: 0 0 6px;
-  font-family: var(--mono);
-  font-size: 16px;
+  margin: 0 0 8px;
+  font-size: 24px;
   font-weight: 600;
+  letter-spacing: -0.01em;
   color: var(--acento);
 }
 
 .ayuda-tema h4 {
-  margin: 14px 0 5px;
+  margin: 22px 0 8px;
+  font-size: 11.5px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: var(--suave);
+}
+
+.ayuda-resumen { margin: 0; font-size: 16px; line-height: 1.6; }
+
+.ayuda-experimental { margin: 0 0 10px; font-size: 13px; color: var(--suave); }
+.ayuda-etiqueta {
+  display: inline-block;
+  margin-right: 4px;
+  padding: 1px 7px;
+  font-size: 10.5px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--aviso);
+  border: 1px solid currentColor;
+  border-radius: 999px;
+}
+
+.ayuda-rotulo {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin: 16px 0 8px;
+}
+.ayuda-tema .ayuda-rotulo h4 { margin: 0; }
+
+.ayuda-caja .ayuda-copiar {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 6px;
+  font-size: 12.5px;
+  border-radius: 6px;
+}
+.ayuda-caja .ayuda-copiar:hover:not(:disabled) { background: var(--tenue-hover); }
+.ayuda-copiar .icono { width: 16px; height: 16px; }
+.ayuda-caja .ayuda-copiar.hecho,
+.ayuda-caja .ayuda-copiar.hecho:hover:not(:disabled) { color: var(--bien); }
+/* Mientras dice "Copiado", el tooltip sobra. */
+.ayuda-copiar.hecho::after { display: none; }
+
+.ayuda-codigo {
+  margin: 0;
+  height: auto;
+  padding: 12px 16px;
+  overflow-x: auto;
+  font-family: var(--mono);
+  font-size: 13.5px;
+  line-height: 1.65;
+  white-space: pre;
+  color: var(--texto);
+  background: var(--fondo);
+  border: 1px solid var(--borde);
+  border-radius: 8px;
+  /* Hereda los colores de .CodeMirror .cm-*, pero no su posicionamiento. */
+  position: static;
+}
+
+/* Lo que muestra el ejemplo, con la misma cara que la consola de la página. */
+.ayuda-salida {
+  margin: 0;
+  padding: 10px 16px;
+  overflow-x: auto;
+  font-family: var(--mono);
+  font-size: 13.5px;
+  line-height: 1.65;
+  white-space: pre;
+  color: var(--consola-texto);
+  background: var(--consola-fondo);
+  border-radius: 8px;
+}
+.ayuda-salida .eco { color: #7ee787; }
+
+.ayuda-recorda {
+  margin-top: 20px;
+  padding: 14px 18px;
+  background: var(--realce);
+  border-radius: 8px;
+}
+.ayuda-recorda-titulo {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 4px;
+  font-size: 14.5px;
+  font-weight: 600;
+}
+.ayuda-recorda-titulo .icono { width: 18px; height: 18px; color: var(--aviso); }
+.ayuda-recorda p:last-child { margin: 0; font-size: 14.5px; line-height: 1.6; color: var(--suave); }
+
+.ayuda-detalles { margin-top: 14px; }
+.ayuda-detalles summary {
+  width: fit-content;
+  padding: 4px 0;
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--suave);
+  cursor: pointer;
+}
+.ayuda-detalles summary:hover { color: var(--acento); }
+
+.ayuda-notas {
+  margin: 8px 0 0;
+  padding-left: 20px;
+  font-size: 14px;
+  line-height: 1.6;
+}
+.ayuda-notas li { margin-bottom: 6px; }
+.ayuda-notas li::marker { color: var(--suave); }
+
+.ayuda-caja .ayuda-volver {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0 0 14px -6px;
+  padding: 4px 8px 4px 6px;
+  font-size: 13.5px;
+  color: var(--acento);
+  border-radius: 6px;
+}
+.ayuda-caja .ayuda-volver:hover:not(:disabled) { color: var(--acento); background: var(--tenue-hover); }
+.ayuda-volver .icono { width: 16px; height: 16px; }
+
+/* --- resultados de la búsqueda */
+
+.ayuda-cuenta { margin: 0 0 10px; font-size: 12.5px; color: var(--suave); }
+
+.ayuda-resultados { margin: 0 -14px; padding: 0; list-style: none; }
+
+.ayuda-resultado {
+  display: grid;
+  gap: 2px;
+  padding: 10px 14px;
+  border-radius: 8px;
+  cursor: pointer;
+}
+.ayuda-resultado:hover { background: var(--tenue-hover); }
+.ayuda-resultado.marcado { background: var(--acento-suave); }
+
+.ayuda-resultado-donde {
   font-size: 11px;
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.06em;
   color: var(--suave);
 }
+.ayuda-resultado-titulo { font-size: 15.5px; font-weight: 600; color: var(--acento); }
+.ayuda-resultado-resumen { font-size: 14px; line-height: 1.5; }
 
-.ayuda-resumen { margin: 0; font-size: 14.5px; line-height: 1.6; }
+.ayuda-contenido mark {
+  color: inherit;
+  background: var(--resaltado);
+  border-radius: 2px;
+}
 
-.ayuda-codigo {
-  margin: 0;
-  padding: 10px 14px;
-  overflow-x: auto;
-  font-family: var(--mono);
+.ayuda-vacio { font-size: 14.5px; line-height: 1.6; }
+.ayuda-vacio p { margin: 0 0 10px; color: var(--suave); }
+.ayuda-vacio .ayuda-vacio-titulo { font-size: 16px; font-weight: 600; color: var(--texto); }
+
+.ayuda-caja .ayuda-enlace {
+  padding: 0;
+  font-size: inherit;
+  font-weight: 600;
+  color: var(--acento);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.ayuda-caja .ayuda-enlace:hover:not(:disabled) { color: var(--acento); }
+
+.ayuda-sugerencias { display: flex; flex-wrap: wrap; gap: 8px; margin: 0 0 18px; }
+.ayuda-caja .ayuda-chip {
+  padding: 5px 12px;
   font-size: 13.5px;
-  line-height: 1.6;
-  white-space: pre;
   color: var(--texto);
   background: var(--fondo);
   border: 1px solid var(--borde);
-  border-radius: 7px;
-  /* Hereda los colores de .CodeMirror .cm-*, pero no su posicionamiento. */
-  position: static;
+  border-radius: 999px;
 }
+.ayuda-caja .ayuda-chip:hover:not(:disabled) { color: var(--acento); border-color: var(--acento); }
 
-.ayuda-notas {
-  margin: 12px 0 0;
-  padding-left: 20px;
+.ayuda-caja .ayuda-borrar-busqueda {
+  padding: 6px 14px;
   font-size: 13.5px;
-  line-height: 1.6;
+  color: var(--texto);
+  border: 1px solid var(--borde);
+}
+.ayuda-caja .ayuda-borrar-busqueda:hover:not(:disabled) { background: var(--tenue-hover); }
+
+/* --- novedades y pie */
+
+.ayuda-novedad { padding: 16px 0; border-bottom: 1px solid var(--borde); }
+.ayuda-novedad:last-of-type { border-bottom: none; }
+.ayuda-novedad h3 { margin: 2px 0 6px; font-size: 17px; }
+.ayuda-novedad-fecha {
+  margin: 0;
+  font-size: 12px;
+  font-weight: 600;
   color: var(--suave);
 }
-.ayuda-notas li { margin-bottom: 4px; }
+.ayuda-novedad-tema {
+  display: inline-block;
+  margin-top: 8px;
+  font-size: 13.5px;
+  color: var(--acento);
+}
 
-.ayuda-sin-resultados { padding: 20px 0; color: var(--suave); }
+.ayuda-pie {
+  margin: 32px 0 0;
+  padding-top: 14px;
+  border-top: 1px solid var(--borde);
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--suave);
+}
+.ayuda-pie p { margin: 0 0 4px; }
 
+@media (prefers-reduced-motion: reduce) {
+  .ayuda-tema.destacado { animation: none; }
+}
+
+/* En angosto, el contenido manda: la barra lateral pasa a ser una lista desplegable. */
 @media (max-width: 860px) {
   .ayuda-fondo { padding: 0; }
   /* A pantalla completa: centrada dejaría franjas arriba y abajo. */
-  .ayuda-caja { height: 100%; max-height: 100%; border: none; border-radius: 0; }
-  .ayuda-cuerpo { flex-direction: column; }
-  .ayuda-indice {
-    width: auto;
-    max-height: 30vh;
-    padding: 12px 16px;
-    border-right: none;
-    border-bottom: 1px solid var(--borde);
+  .ayuda-caja { height: 100%; border: none; border-radius: 0; }
+  .ayuda-cabecera { padding: 10px 10px 0 16px; }
+  .ayuda-subtitulo { display: none; }
+  .ayuda-caja .ayuda-cerrar { margin-left: auto; }
+  .ayuda-busqueda { padding: 10px 12px 0; border-bottom: none; }
+  .ayuda-tecla { display: none; }
+  .ayuda-selector {
+    display: block;
+    width: calc(100% - 24px);
+    margin: 10px 12px 12px;
+    padding: 9px 10px;
+    font: inherit;
+    font-size: 16px;
+    color: var(--texto);
+    background: var(--fondo);
+    border: 1px solid var(--borde);
+    border-radius: 8px;
   }
-  .ayuda-contenido { padding: 16px; }
-  .ayuda-cabecera h2 { display: none; }
+  .ayuda-cuerpo { border-top: 1px solid var(--borde); }
+  .ayuda-indice { display: none; }
+  .ayuda-contenido { padding: 16px 16px 32px; }
+  .ayuda-tema h3 { font-size: 21px; }
+}
+
+/* ------------------------------------------------ aviso de novedades */
+
+.novedad {
+  position: fixed;
+  right: 20px;
+  bottom: 20px;
+  z-index: 45;                  /* debajo de la referencia (50), arriba de todo lo demás */
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  width: min(380px, calc(100vw - 32px));
+  padding: 16px 14px 14px 16px;
+  background: var(--papel);
+  border: 1px solid var(--borde);
+  border-left: 4px solid var(--acento);
+  border-radius: 10px;
+  box-shadow: 0 14px 40px rgba(0, 0, 0, 0.25);
+}
+.novedad-icono { flex-shrink: 0; width: 26px; height: 26px; margin-top: 1px; }
+.novedad-titulo { margin: 0 0 4px; font-size: 15px; font-weight: 700; }
+.novedad-texto { margin: 0; font-size: 13.5px; line-height: 1.5; color: var(--suave); }
+.novedad-acciones { display: flex; align-items: center; gap: 12px; margin-top: 12px; }
+.novedad-acciones button:not(.enlace) { padding: 6px 14px; }
+.novedad-cerrar {
+  flex-shrink: 0;
+  margin: -6px -4px 0 auto;
+  padding: 0 6px;
+  font-size: 20px;
+  line-height: 1.2;
+  color: var(--suave);
+  background: none;
+}
+.novedad-cerrar:hover { color: var(--texto); }
+
+@media (max-width: 860px) {
+  .novedad { right: 16px; bottom: 16px; }
 }
 
 /* ------------------------------------------------------- angosto */
@@ -555,6 +1048,21 @@ button.enlace:hover { color: var(--acento); }
   .tablero { grid-template-columns: 1fr; }
   .panel-editor { min-height: 62vh; }
   .panel-consola { min-height: 38vh; }
-  .barra { flex-wrap: wrap; }
-  .estado { width: 100%; margin-left: 0; }
+  .barra { flex-wrap: wrap; row-gap: 8px; }
+  .estado { order: 10; width: 100%; margin-left: 0; }
+  /* En angosto no entra: el nombre solo ya se entiende. */
+  .bajada { display: none; }
+  .separador { display: none; }
+  /* Los botones de archivo quedan solo con el ícono. La etiqueta sigue ahí para los
+     lectores de pantalla, nada más que invisible. */
+  .archivos .etiqueta {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+  .archivos button.tenue { padding: 8px 10px; }
+  #btn-ayuda { margin-left: auto; }
 }

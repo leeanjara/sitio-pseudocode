@@ -13,11 +13,13 @@ NUMERO_REAL = re.compile(r"[+-]?\d+(\.\d+)?")
 
 
 class ErrorEjecucion(Exception):
-    def __init__(self, mensaje, nodo):
+    def __init__(self, mensaje, nodo, tema=None):
         super().__init__(mensaje)
         self.mensaje = mensaje
         self.linea = nodo.linea
         self.col = nodo.col
+        # El tema de la referencia que lo explica (ver diagnosticos.Diagnostico.tema).
+        self.tema = tema
 
 
 class _Retorno(Exception):
@@ -104,7 +106,7 @@ class Interprete:
         self.pasos += 1
         if self.pasos > self.max_pasos:
             raise ErrorEjecucion(f"se superó el límite de {self.max_pasos:,} pasos; "
-                                 "¿hay un bucle infinito?", nodo)
+                                 "¿hay un bucle infinito?", nodo, tema="mientras")
 
     def celda(self, nombre, marco):
         if marco is not None and nombre in marco:
@@ -176,19 +178,21 @@ class Interprete:
                 # El dígito, no el código: Entero('7') da 7.
                 if not "0" <= valor <= "9":
                     raise ErrorEjecucion(f"{escrito}('{valor}'): solo se convierte un caracter "
-                                         "que sea un dígito, de '0' a '9'", e)
+                                         "que sea un dígito, de '0' a '9'", e,
+                                         tema="conversiones")
                 return int(valor)
             if origen == "String":
                 if not NUMERO_ENTERO.fullmatch(valor.strip()):
                     raise ErrorEjecucion(f'{escrito}("{valor}"): ese texto no es un número '
-                                         "entero", e)
+                                         "entero", e, tema="conversiones")
                 return int(valor.strip())
             return valor
         if destino == "Real":
             if origen == "String":
                 limpio = valor.strip().replace(",", ".")
                 if not NUMERO_REAL.fullmatch(limpio):
-                    raise ErrorEjecucion(f'{escrito}("{valor}"): ese texto no es un número', e)
+                    raise ErrorEjecucion(f'{escrito}("{valor}"): ese texto no es un número', e,
+                                         tema="conversiones")
                 return float(limpio)
             return float(valor)
         if destino == "Caracter":
@@ -198,11 +202,11 @@ class Interprete:
                 if not 0 <= valor <= 9:
                     raise ErrorEjecucion(f"{escrito}({valor}): solo se convierte un número de "
                                          "una cifra, de 0 a 9 (para más cifras usá "
-                                         "String(x))", e)
+                                         "String(x))", e, tema="conversiones")
                 return str(valor)
             if origen == "String" and len(valor) != 1:
                 raise ErrorEjecucion(f'{escrito}("{valor}"): el texto tiene que tener un solo '
-                                     f"caracter, y tiene {len(valor)}", e)
+                                     f"caracter, y tiene {len(valor)}", e, tema="conversiones")
             return valor
         return valor
 
@@ -217,10 +221,10 @@ class Interprete:
         if isinstance(contenedor, list):
             raise ErrorEjecucion(f"la posición {i} no existe: '{nombre}' tiene {cuantos} "
                                  f"{'posición' if cuantos == 1 else 'posiciones'}, de la 1 a "
-                                 f"la {cuantos}", nodo)
+                                 f"la {cuantos}", nodo, tema="arreglos")
         raise ErrorEjecucion(f"la posición {i} no existe: hay {cuantos} "
                              f"{'caracter' if cuantos == 1 else 'caracteres'} y se "
-                             f"numeran desde 1", nodo)
+                             f"numeran desde 1", nodo, tema="posiciones")
 
     def ubicar(self, lugar, marco):
         """La celda donde vive un lugar: 'x', 'notas[3]', 'm[2][1]'.
@@ -255,7 +259,8 @@ class Interprete:
         valor = celda.valor
         if valor is None:
             que = f"la posición {nombre}" if "[" in nombre else f"la variable '{nombre}'"
-            raise ErrorEjecucion(f"{que} se usa antes de tener un valor", e)
+            tema = "arreglos" if "[" in nombre else "var"
+            raise ErrorEjecucion(f"{que} se usa antes de tener un valor", e, tema)
         for acceso in letras:
             valor = valor[self.posicion(valor, acceso.indice, marco, acceso, nombre)]
         return valor
@@ -268,7 +273,7 @@ class Interprete:
         """
         if texto is None:
             raise ErrorEjecucion(f"'{nombre}' todavía no tiene un valor: no se puede "
-                                 "cambiarle una posición", accesos[0])
+                                 "cambiarle una posición", accesos[0], tema="posiciones")
         i = self.posicion(texto, accesos[0].indice, marco, accesos[0], nombre)
         if len(accesos) > 1:
             letra = self.cambiar_posicion(texto[i], accesos[1:], letra, marco, nombre)
@@ -278,7 +283,8 @@ class Interprete:
         try:
             texto = self.entrada()
         except EOFError:
-            raise ErrorEjecucion(f"Leer({nombre}): no hay más datos de entrada", nodo)
+            raise ErrorEjecucion(f"Leer({nombre}): no hay más datos de entrada", nodo,
+                                 tema="leer")
         limpio = texto.strip()
         try:
             if tipo == "Entero":
@@ -287,15 +293,15 @@ class Interprete:
                 return float(limpio.replace(",", "."))
         except ValueError:
             raise ErrorEjecucion(f"Leer({nombre}): se esperaba un número {tipo}, pero se "
-                                 f"ingresó '{texto}'", nodo)
+                                 f"ingresó '{texto}'", nodo, tema="leer")
         if tipo == "Logico":
             if limpio.lower() in ("verdadero", "falso"):
                 return limpio.lower() == "verdadero"
             raise ErrorEjecucion(f"Leer({nombre}): se esperaba Verdadero o Falso, pero se "
-                                 f"ingresó '{texto}'", nodo)
+                                 f"ingresó '{texto}'", nodo, tema="leer")
         if tipo == "Caracter" and len(texto) != 1:
             raise ErrorEjecucion(f"Leer({nombre}): se esperaba un solo caracter, pero se "
-                                 f"ingresó '{texto}'", nodo)
+                                 f"ingresó '{texto}'", nodo, tema="leer")
         return texto
 
     # ------------------------------------------------------------ expresiones
@@ -338,7 +344,7 @@ class Interprete:
             valor = nuevo[sub.nombre].valor
             if valor is None:
                 raise ErrorEjecucion(f"la función '{sub.nombre}' terminó sin asignar su valor de "
-                                     "retorno", llamada)
+                                     "retorno", llamada, tema="funcion")
             return valor
         return None
 
@@ -348,7 +354,8 @@ class Interprete:
         if isinstance(e, N.Variable):
             valor = self.celda(e.nombre, marco).valor
             if valor is None:
-                raise ErrorEjecucion(f"la variable '{e.nombre}' se usa antes de tener un valor", e)
+                raise ErrorEjecucion(f"la variable '{e.nombre}' se usa antes de tener un valor", e,
+                                     tema="var")
             return valor
         if isinstance(e, N.Llamada):
             return self.llamar(e, marco)
@@ -368,7 +375,7 @@ class Interprete:
         a = self.evaluar(e.izq, marco)
         b = self.evaluar(e.der, marco)
         if op in ("/", "%") and b == 0:
-            raise ErrorEjecucion("división por cero", e)
+            raise ErrorEjecucion("división por cero", e, tema="aritmeticos")
         ambos_enteros = type(a) is int and type(b) is int
         if op == "/":
             return division_entera(a, b) if ambos_enteros else a / b

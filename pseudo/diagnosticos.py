@@ -8,14 +8,18 @@ class Diagnostico:
     mensaje: str
     linea: int
     col: int
+    # El tema de la referencia (web/referencia.json) que explica lo que está mal, para
+    # que la página ofrezca ir a leerlo. None si no hay uno que ayude.
+    tema: str | None = None
 
 
 class ErrorSintaxis(Exception):
-    def __init__(self, mensaje, linea, col):
+    def __init__(self, mensaje, linea, col, tema=None):
         super().__init__(mensaje)
         self.mensaje = mensaje
         self.linea = linea
         self.col = col
+        self.tema = tema
 
 
 class Diagnosticos:
@@ -30,14 +34,14 @@ class Diagnosticos:
             self._vistos.add(diagnostico)
             self.lista.append(diagnostico)
 
-    def error(self, mensaje, linea, col):
-        self._sumar(Diagnostico("error", mensaje, linea, col))
+    def error(self, mensaje, linea, col, tema=None):
+        self._sumar(Diagnostico("error", mensaje, linea, col, tema))
 
-    def advertencia(self, mensaje, linea, col):
-        self._sumar(Diagnostico("advertencia", mensaje, linea, col))
+    def advertencia(self, mensaje, linea, col, tema=None):
+        self._sumar(Diagnostico("advertencia", mensaje, linea, col, tema))
 
     def agregar(self, exc):
-        self.error(exc.mensaje, exc.linea, exc.col)
+        self.error(exc.mensaje, exc.linea, exc.col, exc.tema)
 
     @property
     def errores(self):
