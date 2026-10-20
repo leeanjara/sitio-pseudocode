@@ -39,6 +39,16 @@ let marcas = [];
 let contadorAnalisis = 0;
 let temporizador = null;
 let detenidoPorUsuario = false;
+// Si ya usaba la página antes de esta visita. Se mira acá, al arrancar, antes de que el
+// editor escriba nada en el navegador; las novedades solo se le muestran a quien venía.
+const VENIA_DE_ANTES = (() => {
+  try {
+    return localStorage.getItem("pseudo:programa") !== null ||
+           localStorage.getItem("pseudo:archivo") !== null;
+  } catch (_) {
+    return false;
+  }
+})();
 let avisosDesplegados = (() => {
   try { return localStorage.getItem("pseudo:advertencias") === "1"; } catch (_) { return false; }
 })();
@@ -88,18 +98,84 @@ function definirModo(vocab) {
   }));
 }
 
+// Cada cuántas columnas empieza un nivel, para dibujar las guías de la sangría con
+// espacios. Sigue al programa (ver estiloDeSangria) y se actualiza cuando cambia.
+let columnasPorNivel = 4;
+
+// Hace visible la sangría, como VS Code, porque es donde está el problema cuando se
+// mezclan tabulaciones y espacios: las dos cosas se dibujan igual. Cada tabulación lleva
+// solo la guía vertical con la que empieza cada nivel; cada espacio, además, un puntito.
+// Solo la sangría: una tabulación o un espacio después del código no se marca.
+// También en las líneas vacías, para que se vea lo que se va tecleando.
+//
+// Si la sangría mezcla las dos cosas, además va con fondo rojo, sin esperar al
+// verificador. El rojo aparece recién cuando la línea tiene texto, igual que el error:
+// una línea vacía no se verifica.
+const SANGRIA_VISIBLE = {
+  // Cada tramo en su propio elemento, aunque tenga el mismo estilo que el de al lado:
+  // si CodeMirror los juntara, un nivel se comería la guía del siguiente.
+  flattenSpans: false,
+  token(stream) {
+    const blancos = stream.string.match(/^[ \t]*/)[0];
+    if (stream.pos >= blancos.length) {
+      stream.skipToEnd();
+      return null;
+    }
+    const mezcla = blancos.length < stream.string.length &&
+                   blancos.includes(" ") && blancos.includes("\t");
+    let estilo;
+    if (stream.next() === "\t") {
+      estilo = "sangria-tab";             // una tabulación es un nivel, con su guía
+    } else {
+      // Los espacios, de a un nivel por tramo: el que arranca en una parada lleva la guía.
+      const columna = CodeMirror.countColumn(stream.string, stream.pos - 1,
+                                             CodeMirror.defaults.tabSize);
+      let resto = columnasPorNivel - (columna % columnasPorNivel) - 1;
+      while (resto-- > 0 && stream.peek() === " " && stream.pos < blancos.length) stream.next();
+      estilo = "sangria-espacio" + (columna % columnasPorNivel === 0 ? " sangria-guia" : "");
+    }
+    return estilo + (mezcla ? " sangria-mezcla" : "");
+  },
+};
+
+// Si cambió la unidad de la sangría, se vuelven a dibujar las guías.
+function actualizarGuias(cm) {
+  const { unidad } = estiloDeSangria(cm);
+  if (unidad === columnasPorNivel) return;
+  columnasPorNivel = unidad;
+  cm.removeOverlay(SANGRIA_VISIBLE);
+  cm.addOverlay(SANGRIA_VISIBLE);
+}
+
 // Con qué está sangrado el programa que hay escrito: tabulaciones o espacios, y de a
 // cuántos. La unidad se toma de la sangría más chica que aparezca.
+//
+// Se cuentan solo las líneas con código, las mismas que mira el verificador. Las que
+// tienen solo blancos o solo un comentario no cuentan: si no, unas cuantas líneas vacías
+// con tabulación que dejó Enter harían que Tab ponga tabulaciones en un programa sangrado
+// con espacios, y el verificador marcaría como error cada una.
 function estiloDeSangria(cm) {
-  let tabs = 0, espacios = 0, minimo = 0;
-  cm.eachLine((linea) => {
-    const blancos = (linea.text.match(/^[ \t]+/) || [""])[0];
-    if (!blancos) return;
-    if (blancos[0] === "\t") { tabs++; return; }
-    espacios++;
-    if (!minimo || blancos.length < minimo) minimo = blancos.length;
-  });
-  const conTabs = tabs > espacios;
+  const contar = (soloCodigo) => {
+    const c = { tabs: 0, espacios: 0, minimo: 0 };
+    cm.eachLine((linea) => {
+      const blancos = (linea.text.match(/^[ \t]+/) || [""])[0];
+      const resto = linea.text.slice(blancos.length);
+      if (!blancos || (soloCodigo && (!resto.trim() || resto.startsWith("//")))) return;
+      if (blancos[0] === "\t") { c.tabs++; return; }
+      c.espacios++;
+      if (!c.minimo || blancos.length < c.minimo) c.minimo = blancos.length;
+    });
+    return c;
+  };
+  let { tabs, espacios, minimo } = contar(true);
+  // Mientras ninguna línea con código tenga sangría, valen también las que tienen solo
+  // blancos: así, unos espacios escritos a mano antes del primer Tab deciden el estilo.
+  if (!tabs && !espacios) ({ tabs, espacios, minimo } = contar(false));
+  // Sin ninguna sangría todavía (un programa nuevo), se empieza con tabulaciones. Al revés
+  // no se podría: la tecla Tab es la única forma de escribir una tabulación, así que con
+  // espacios por defecto nunca habría una primera; los espacios, en cambio, se escriben a
+  // mano con la barra espaciadora, y desde ahí Tab los sigue.
+  const conTabs = tabs > espacios || espacios === 0;
   // 'unidad' va en columnas, no en caracteres, porque así mide CodeMirror al sangrar y
   // des-sangrar. Una tabulación ocupa tabSize columnas: decir 1 haría que al des-sangrar
   // quedara un resto en espacios, o sea una mezcla.
@@ -119,6 +195,18 @@ function aplicarEstilo(cm) {
 function sangrar(cm) {
   const { conTabs, unidad } = aplicarEstilo(cm);
   if (cm.somethingSelected()) return cm.indentSelection("add");
+  const cursor = cm.getCursor();
+  const texto = cm.getLine(cursor.line);
+  // Dentro de la sangría no se inserta un caracter donde está el cursor: después de
+  // cuatro espacios, un "\t" dejaría la línea mezclada. Se rehace la sangría entera
+  // hasta la próxima parada, con el estilo del archivo; si ya estaba mezclada, se arregla.
+  if (texto.slice(0, cursor.ch).trim() === "") {
+    const blancos = texto.match(/^[ \t]*/)[0];
+    const ancho = CodeMirror.countColumn(blancos, null, cm.getOption("tabSize"));
+    cm.indentLine(cursor.line, unidad - (ancho % unidad), true);
+    cm.setCursor({ line: cursor.line, ch: cm.getLine(cursor.line).match(/^[ \t]*/)[0].length });
+    return;
+  }
   if (conTabs) return cm.replaceSelection("\t");
   // Completa hasta la próxima parada, para que no se desalinee al tabular a mitad de línea.
   const columna = cm.getCursor().ch;
@@ -130,18 +218,60 @@ function desangrar(cm) {
   cm.indentSelection("subtract");
 }
 
+// Enter copia la sangría de la línea, tal cual: los mismos caracteres, no el mismo ancho.
+// El Enter de CodeMirror mide el ancho y lo rearma con tabulaciones o espacios según
+// indentWithTabs, y eso daba sorpresas: en un programa con tabulaciones, una línea con
+// 6 espacios seguía con una tabulación y 2 espacios, y antes de ajustar indentWithTabs,
+// cada línea nueva de un programa con tabulaciones salía con espacios.
+function nuevaLinea(cm) {
+  const nuevas = cm.listSelections().map((rango) => {
+    const desde = CodeMirror.cmpPos(rango.anchor, rango.head) < 0 ? rango.anchor : rango.head;
+    // Solo lo que hay antes del cursor: Enter en medio de la sangría la parte en dos.
+    const antes = cm.getLine(desde.line).slice(0, desde.ch);
+    return "\n" + antes.match(/^[ \t]*/)[0];
+  });
+  cm.replaceSelections(nuevas, null, "+input");
+}
+
 // Si Tab pone un nivel entero, Backspace tiene que sacar un nivel entero: borrar cuatro
 // veces para deshacer un Tab es la clase de fricción que hace que el editor estorbe.
 function borrarSangria(cm) {
-  if (cm.somethingSelected()) return CodeMirror.Pass;
+  if (cm.somethingSelected() || cm.listSelections().length > 1) return CodeMirror.Pass;
   const cursor = cm.getCursor();
+  // Al principio de la línea, Backspace la une con la de arriba. Supr y Backspace dejan la
+  // sangría de la línea en la que está el cursor: si la de arriba está vacía (o tiene solo
+  // blancos), unirlas es borrarla, y esta queda como estaba.
+  if (cursor.ch === 0) {
+    if (cursor.line === cm.firstLine()) return CodeMirror.Pass;
+    if (cm.getLine(cursor.line - 1).trim() !== "") return unirConLaDeAbajo(cm, cursor.line - 1);
+    return cm.replaceRange("", { line: cursor.line - 1, ch: 0 }, { line: cursor.line, ch: 0 },
+                           "+delete");
+  }
   const antes = cm.getLine(cursor.line).slice(0, cursor.ch);
   // Solo dentro de la sangría; en medio del texto, Backspace es el de siempre.
-  if (!antes || antes.trim() !== "") return CodeMirror.Pass;
+  if (antes.trim() !== "") return CodeMirror.Pass;
   const { conTabs, unidad } = estiloDeSangria(cm);
   if (conTabs) return CodeMirror.Pass;     // una tabulación ya es un solo caracter
   const borrar = ((cursor.ch - 1) % unidad) + 1;
   cm.replaceRange("", { line: cursor.line, ch: cursor.ch - borrar }, cursor);
+}
+
+// Unir una línea con la de abajo trae el texto de la de abajo, no su sangría: si no, las
+// sangrías se suman, y una línea con 3 tabulaciones más otra con 2 terminaba con 5.
+function unirConLaDeAbajo(cm, linea) {
+  const sangria = cm.getLine(linea + 1).match(/^[ \t]*/)[0].length;
+  cm.replaceRange("", { line: linea, ch: cm.getLine(linea).length },
+                  { line: linea + 1, ch: sangria }, "+delete");
+}
+
+function suprimir(cm) {
+  if (cm.somethingSelected() || cm.listSelections().length > 1) return CodeMirror.Pass;
+  const cursor = cm.getCursor();
+  // Solo al final de la línea; en el medio, Supr es el de siempre.
+  if (cursor.ch < cm.getLine(cursor.line).length || cursor.line === cm.lastLine()) {
+    return CodeMirror.Pass;
+  }
+  unirConLaDeAbajo(cm, cursor.line);
 }
 
 function crearEditor() {
@@ -151,19 +281,32 @@ function crearEditor() {
     indentUnit: 4,
     indentWithTabs: false,
     gutters: ["CodeMirror-linenumbers", "marcas"],
+    // Ctrl+Enter (ejecutar) lo atiende el documento, para que ande con el foco en
+    // cualquier parte de la página y no solo dentro del editor.
     extraKeys: {
-      "Ctrl-Enter": ejecutar,
-      "Cmd-Enter": ejecutar,
       Tab: sangrar,
       "Shift-Tab": desangrar,
+      Enter: nuevaLinea,
       Backspace: borrarSangria,
+      Delete: suprimir,
     },
   });
   editor.on("change", () => {
     localStorage.setItem("pseudo:programa", editor.getValue());
+    actualizarGuias(editor);
     clearTimeout(temporizador);
     temporizador = setTimeout(analizar, ESPERA_ANALISIS);
+    actualizarTitulo();
   });
+  // Un archivo soltado sobre el editor lo maneja el documento (ver más abajo), que lo abre
+  // en vez de pegar su texto en el medio del programa, que es lo que haría CodeMirror.
+  editor.on("drop", (cm, e) => {
+    if (hayArchivos(e)) e.codemirrorIgnore = true;
+  });
+  columnasPorNivel = estiloDeSangria(editor).unidad;
+  editor.addOverlay(SANGRIA_VISIBLE);
+  restaurarArchivo();
+  actualizarTitulo();
 }
 
 // ------------------------------------------------------------ diagnósticos
@@ -199,6 +342,21 @@ function irA(d) {
   editor.focus();
 }
 
+const ICONO_LIBRO = '<svg class="icono" viewBox="0 0 24 24" aria-hidden="true"><path ' +
+  'd="M2 4h6a4 4 0 0 1 4 4v13a3 3 0 0 0-3-3H2zM22 4h-6a4 4 0 0 0-4 4v13a3 3 0 0 1 3-3h7z"/></svg>';
+
+// Un botón que abre la Referencia en el tema que explica un error. Solo si el error dice
+// cuál es y la referencia está cargada: sin ella no hay adónde ir.
+function botonReferencia(tema) {
+  const titulo = tema && window.Ayuda && window.Ayuda.titulo(tema);
+  if (!titulo) return null;
+  const boton = document.createElement("button");
+  boton.type = "button";
+  boton.title = `Ver «${titulo}» en la Referencia`;
+  boton.addEventListener("click", () => window.Ayuda.abrir(tema));
+  return boton;
+}
+
 function crearFila(d) {
   const fila = document.createElement("button");
   fila.className = `diagnostico ${d.nivel}`;
@@ -210,7 +368,17 @@ function crearFila(d) {
   texto.textContent = d.mensaje;
   fila.append(donde, texto);
   fila.addEventListener("click", () => irA(d));
-  return fila;
+
+  // El botón de la Referencia va al lado y no adentro: un botón no puede ir dentro de otro.
+  const ayuda = botonReferencia(d.tema);
+  if (!ayuda) return fila;
+  ayuda.className = "diagnostico-ayuda";
+  ayuda.setAttribute("aria-label", ayuda.title);
+  ayuda.innerHTML = ICONO_LIBRO;
+  const contenedor = document.createElement("div");
+  contenedor.className = "fila-diagnostico";
+  contenedor.append(fila, ayuda);
+  return contenedor;
 }
 
 function mostrarDiagnosticos(informe) {
@@ -407,10 +575,18 @@ function informarFin(informe) {
                "error");
       ponerEstado("Hay errores", "mal");
       break;
-    case "error_ejecucion":
-      escribir(`✗ Error en la línea ${informe.linea}: ${informe.mensaje}`, "error");
+    case "error_ejecucion": {
+      const linea = escribir(`✗ Error en la línea ${informe.linea}: ${informe.mensaje}`,
+                             "error");
+      const ayuda = botonReferencia(informe.tema);
+      if (ayuda) {
+        ayuda.className = "consola-ayuda";
+        ayuda.textContent = "Ver en la Referencia";
+        linea.append(" ", ayuda);
+      }
       ponerEstado("Error de ejecución", "mal");
       break;
+    }
     default:
       escribir("✗ " + (informe.mensaje || "Algo falló."), "error");
       ponerEstado("Error", "mal");
@@ -433,7 +609,7 @@ function arrancarWorker() {
         if (window.Ayuda) window.Ayuda.modoListo();
         estado = "listo";
         btnEjecutar.disabled = false;
-        ponerEstado(INTERACTIVO ? "Listo" : "Listo (modo datos precargados)", "bien");
+        ponerEstado(textoListo(), "bien");
         analizar();
         break;
       case "diagnosticos":
@@ -457,12 +633,406 @@ function arrancarWorker() {
   };
 }
 
+// --------------------------------------------------------- abrir y guardar
+
+const TIPOS_DE_ARCHIVO = [{
+  description: "Programa de pseudocódigo",
+  accept: { "text/plain": [".txt", ".pseudo"] },
+}];
+const TAMANIO_MAXIMO = 1000000;     // un programa de verdad no llega ni cerca
+
+// Chrome y Edge dejan escribir sobre un archivo, así que Guardar puede pisar el mismo una
+// y otra vez. En los demás (Firefox, Safari, navegadores embebidos) lo único posible es
+// descargar, y el navegador nunca pisa lo que ya está en Descargas: cada guardado sería
+// una copia nueva, archivo(1).txt, archivo(2).txt... Ahí el botón dice lo que hace,
+// "Descargar", y Ctrl+S no descarga: el programa ya queda guardado en el navegador.
+const PUEDE_SOBRESCRIBIR = typeof window.showSaveFilePicker === "function";
+
+// El archivo con el que se está trabajando: { nombre, handle }. 'handle' existe cuando el
+// navegador deja escribir sobre el archivo (Chrome, Edge); si no, guardar es descargar.
+let archivo = null;
+let generacionGuardada = -1;
+
+function textoListo() {
+  return INTERACTIVO ? "Listo" : "Listo (modo datos precargados)";
+}
+
+function avisar(texto, clase = "bien", duracion = 2500) {
+  ponerEstado(texto, clase);
+  setTimeout(() => {
+    if (elEstado.textContent === texto && estado === "listo") ponerEstado(textoListo(), "bien");
+  }, duracion);
+}
+
+function hayCambios() {
+  return !editor.isClean(generacionGuardada);
+}
+
+// Antes de reemplazar el programa (Abrir, Nuevo): si hay algo sin guardar, pregunta.
+function puedeDescartar(accion) {
+  return !hayCambios() || window.confirm(
+    `Tu programa tiene cambios que no guardaste en un archivo. ¿${accion} igual? Lo que ` +
+    "no guardaste se pierde.");
+}
+
+// Con lo mínimo para arrancar. El nombre queda seleccionado para escribir encima.
+const PLANTILLA_NUEVO = "Programa mi_programa\nVar\n\nInicio\n\nFin\n";
+
+function nuevo() {
+  if (estado === "ejecutando" || estado === "esperando-entrada") {
+    avisar("Detené el programa que está corriendo antes de empezar uno nuevo", "mal");
+    return;
+  }
+  if (!puedeDescartar("Empezar un programa nuevo")) return;
+  editor.setValue(PLANTILLA_NUEVO);
+  editor.clearHistory();
+  // Sin archivo: el próximo Guardar vuelve a preguntar dónde, en vez de pisar el anterior.
+  archivo = null;
+  generacionGuardada = editor.changeGeneration();
+  recordarArchivo();                // que el desvínculo sobreviva a una recarga
+  limpiarConsola();
+  actualizarTitulo();
+  editor.setSelection({ line: 0, ch: 9 }, { line: 0, ch: 20 });   // "mi_programa"
+  editor.focus();
+}
+
+function nombreDelPrograma() {
+  const m = /^\s*Programa\s+(\S+)/m.exec(editor.getValue());
+  return m ? m[1] : null;
+}
+
+function nombreSugerido() {
+  // Sin los caracteres que Windows no acepta en un nombre de archivo.
+  const nombre = (nombreDelPrograma() || "programa").replace(/[\\/:*?"<>|]/g, "_");
+  return nombre + ".txt";
+}
+
+function actualizarTitulo() {
+  const programa = nombreDelPrograma();
+  // El punto de "sin guardar" solo tiene sentido si hay un archivo: sin archivo, el
+  // programa igual queda guardado en el navegador.
+  const sucio = archivo !== null && hayCambios();
+  document.title = (sucio ? "• " : "") +
+                   (programa ? programa + " — PseudoLab" : "PseudoLab");
+  $("archivo").textContent = archivo ? archivo.nombre + (sucio ? " •" : "") : "";
+  $("archivo").title = sucio ? "Hay cambios sin guardar en el archivo" : "";
+}
+
+function hayArchivos(e) {
+  return !!e.dataTransfer && Array.from(e.dataTransfer.types || []).includes("Files");
+}
+
+async function leerTexto(file) {
+  const bytes = await file.arrayBuffer();
+  try {
+    return new TextDecoder("utf-8", { fatal: true }).decode(bytes);
+  } catch (_) {
+    // Lo guardado con el Bloc de notas viejo no es UTF-8; el CLI hace lo mismo.
+    return new TextDecoder("windows-1252").decode(bytes);
+  }
+}
+
+async function cargarArchivo(file, handle = null) {
+  if (file.size > TAMANIO_MAXIMO) {
+    avisar(`"${file.name}" es demasiado grande para ser un programa`, "mal");
+    return;
+  }
+  if (!puedeDescartar(`Abrir "${file.name}"`)) return;
+  const texto = (await leerTexto(file)).replace(/\r\n?/g, "\n");
+  editor.setValue(texto);
+  editor.clearHistory();          // que deshacer no vuelva al programa anterior
+  archivo = { nombre: file.name, handle };
+  generacionGuardada = editor.changeGeneration();
+  recordarArchivo();
+  actualizarTitulo();
+  editor.focus();
+  avisar(`Abierto: ${file.name}`);
+}
+
+async function abrir() {
+  if (!window.showOpenFilePicker) {
+    $("selector-archivo").click();    // sigue en el evento "change" del selector
+    return;
+  }
+  let handle;
+  try {
+    [handle] = await window.showOpenFilePicker({ types: TIPOS_DE_ARCHIVO, multiple: false });
+  } catch (e) {
+    if (e.name !== "AbortError") avisar(`No se pudo abrir: ${e.message}`, "mal");
+    return;
+  }
+  await cargarArchivo(await handle.getFile(), handle);
+}
+
+function descargar(texto, nombre) {
+  const url = URL.createObjectURL(new Blob([texto], { type: "text/plain;charset=utf-8" }));
+  const enlace = document.createElement("a");
+  enlace.href = url;
+  enlace.download = nombre;
+  document.body.appendChild(enlace);
+  enlace.click();
+  enlace.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+// comoNuevo: pide dónde guardar aunque ya haya un archivo (Ctrl+Shift+S).
+async function guardar(comoNuevo = false) {
+  // Lo que se va a escribir, tomado antes de esperar al diálogo y al disco. Si se edita
+  // mientras tanto, esa edición no está en el archivo y tiene que seguir marcada como
+  // sin guardar: por eso no se mira el editor recién al terminar.
+  const texto = editor.getValue();
+  const generacion = editor.changeGeneration();
+  const nombre = (!comoNuevo && archivo) ? archivo.nombre : nombreSugerido();
+  try {
+    let handle = (!comoNuevo && archivo) ? archivo.handle : null;
+    // Un archivo abierto con Abrir viene con permiso solo para leerlo: la primera vez que
+    // se guarda, el navegador pregunta. Si no se da, se pregunta dónde guardar.
+    if (handle && !(await permisoParaEscribir(handle))) handle = null;
+    if (!handle && window.showSaveFilePicker) {
+      handle = await window.showSaveFilePicker({ suggestedName: nombre, types: TIPOS_DE_ARCHIVO });
+    }
+    if (handle) {
+      // Escribe sobre el mismo archivo, como un editor de escritorio.
+      const escritura = await handle.createWritable();
+      await escritura.write(texto);
+      await escritura.close();
+      archivo = { nombre: handle.name, handle };
+    } else {
+      // Firefox y Safari no dejan escribir sobre un archivo: queda en Descargas.
+      descargar(texto, nombre);
+      archivo = { nombre, handle: null };
+    }
+  } catch (e) {
+    if (e.name !== "AbortError") avisar(`No se pudo guardar: ${e.message}`, "mal");
+    return;
+  }
+  generacionGuardada = generacion;
+  recordarArchivo(texto);
+  actualizarTitulo();
+  avisar(archivo.handle ? `Guardado en ${archivo.nombre}` : `Descargado como ${archivo.nombre}`);
+}
+
+async function permisoParaEscribir(handle) {
+  if (typeof handle.queryPermission !== "function") return true;
+  const modo = { mode: "readwrite" };
+  try {
+    if ((await handle.queryPermission(modo)) === "granted") return true;
+    return (await handle.requestPermission(modo)) === "granted";
+  } catch (_) {
+    return false;
+  }
+}
+
+// ------------------------------------------------- recordar el archivo al recargar
+
+// Sin esto, al recargar la página el programa vuelve (lo guarda el navegador), pero se
+// pierde de qué archivo era y que estaba guardado, y Nuevo y Abrir preguntarían por nada.
+// Se recuerda el nombre y el texto tal como quedó guardado.
+//
+// El archivo en sí NO se recuerda, a propósito: guardarlo en IndexedDB permitiría seguir
+// escribiéndolo después de recargar, pero en Edge (probado en la versión 153) leerlo de
+// vuelta cierra la pestaña. Como eso pasaría al cargar la página, PseudoLab quedaría
+// inutilizable en Edge. El costo de no hacerlo es chico: después de recargar, el primer
+// Guardar vuelve a abrir el diálogo, con el mismo nombre ya puesto.
+const CLAVE_ARCHIVO = "pseudo:archivo";
+
+// texto: lo que quedó en el archivo (por defecto, lo que hay en el editor).
+function recordarArchivo(texto = editor.getValue()) {
+  try {
+    if (archivo) {
+      localStorage.setItem(CLAVE_ARCHIVO, JSON.stringify({ nombre: archivo.nombre, texto }));
+    } else {
+      localStorage.removeItem(CLAVE_ARCHIVO);
+    }
+  } catch (_) { /* sin memoria del navegador, vale solo para esta sesión */ }
+}
+
+function archivoRecordado() {
+  try {
+    const dato = JSON.parse(localStorage.getItem(CLAVE_ARCHIVO));
+    return dato && typeof dato.nombre === "string" && typeof dato.texto === "string" ? dato : null;
+  } catch (_) {
+    return null;
+  }
+}
+
+// Al arrancar: ¿el programa que volvió del navegador estaba guardado en un archivo?
+function restaurarArchivo() {
+  const inicial = editor.getValue();
+  const recordado = archivoRecordado();
+  if (recordado) {
+    // Sin el archivo en sí (ver arriba): Guardar lo pide de nuevo, con este nombre.
+    archivo = { nombre: recordado.nombre, handle: null };
+    // Si se cambió después de guardar, sigue vinculado al archivo pero con cambios.
+    generacionGuardada = recordado.texto === inicial ? editor.changeGeneration() : -1;
+  } else {
+    // El ejemplo y el esqueleto de Nuevo se pueden volver a obtener: no hay nada que
+    // perder. Cualquier otra cosa es un programa tuyo que no está en ningún archivo.
+    generacionGuardada = (inicial === EJEMPLO || inicial === PLANTILLA_NUEVO)
+      ? editor.changeGeneration() : -1;
+  }
+}
+
+// ----------------------------------------------------------------- versión
+
+// version.json lo escribe --empaquetar. En la versión local (python -m pseudo --web) no
+// existe, y se dice eso.
+function textoVersion(v) {
+  if (!v || !v.commit) return "Versión local, sin publicar";
+  const [anio, mes, dia] = String(v.fecha || "").split("-");
+  let texto = `Versión ${v.commit}` + (dia ? ` del ${dia}/${mes}/${anio}` : "");
+  if (v.rama && v.rama !== "main") texto += ` (rama ${v.rama})`;
+  if (v.sin_commitear) texto += ", con cambios sin commitear";
+  return texto;
+}
+
+fetch("version.json", { cache: "no-store" })
+  .then((r) => (r.ok ? r.json() : null))
+  .catch(() => null)
+  .then((v) => {
+    const texto = textoVersion(v);
+    window.PseudoLab = { version: texto };
+    $("logo").title = "PseudoLab · " + texto;
+  });
+
+// --------------------------------------------------------------- novedades
+
+// Las novedades están en referencia.json, de la más nueva a la más vieja. Quien vuelve
+// después de un cambio ve una vez un aviso con la más nueva; después ya no. Quien entra
+// por primera vez no lo ve: para esa persona todo es nuevo, no hay nada que avisarle.
+const CLAVE_NOVEDADES = "pseudo:novedades";
+
+function anotarNovedadesVistas(id) {
+  try { localStorage.setItem(CLAVE_NOVEDADES, id); } catch (_) { /* se vuelve a mostrar */ }
+}
+
+function mostrarNovedades(lista) {
+  if (!lista.length) return;
+  const ultima = lista[0];
+  let vista = null;
+  try { vista = localStorage.getItem(CLAVE_NOVEDADES); } catch (_) { return; }
+  if (vista === ultima.id) return;
+  if (!VENIA_DE_ANTES) {
+    anotarNovedadesVistas(ultima.id);
+    return;
+  }
+  // Cuántas no vio: las que están antes de la última que vio (o todas, si nunca vio una).
+  const indiceVista = lista.findIndex((n) => n.id === vista);
+  const sinVer = indiceVista === -1 ? lista.length : indiceVista;
+
+  const aviso = document.createElement("aside");
+  aviso.className = "novedad";
+  aviso.setAttribute("role", "status");
+  const cerrar = () => {
+    anotarNovedadesVistas(ultima.id);
+    aviso.remove();
+  };
+
+  const icono = document.createElement("img");
+  icono.src = "icono.svg";
+  icono.alt = "";
+  icono.className = "novedad-icono";
+  const cuerpo = document.createElement("div");
+  const titulo = document.createElement("p");
+  titulo.className = "novedad-titulo";
+  titulo.textContent = ultima.titulo;
+  const texto = document.createElement("p");
+  texto.className = "novedad-texto";
+  texto.textContent = ultima.texto;
+  const acciones = document.createElement("div");
+  acciones.className = "novedad-acciones";
+  const entendido = document.createElement("button");
+  entendido.textContent = "Entendido";
+  entendido.addEventListener("click", cerrar);
+  const todas = document.createElement("button");
+  todas.className = "enlace";
+  todas.textContent = sinVer > 1
+    ? `Ver las ${sinVer} novedades` : "Ver todas las novedades";
+  todas.addEventListener("click", () => {
+    cerrar();
+    window.Ayuda.abrir("novedades");
+  });
+  acciones.append(entendido, todas);
+  cuerpo.append(titulo, texto, acciones);
+
+  const x = document.createElement("button");
+  x.className = "novedad-cerrar";
+  x.setAttribute("aria-label", "Cerrar el aviso");
+  x.textContent = "×";
+  x.addEventListener("click", cerrar);
+
+  aviso.append(icono, cuerpo, x);
+  document.body.appendChild(aviso);
+}
+
 // ------------------------------------------------------------------ inicio
 
 btnEjecutar.addEventListener("click", ejecutar);
 btnDetener.addEventListener("click", detener);
 $("btn-limpiar").addEventListener("click", limpiarConsola);
 $("btn-ayuda").addEventListener("click", () => window.Ayuda.abrir());
+$("btn-nuevo").addEventListener("click", nuevo);
+$("btn-abrir").addEventListener("click", abrir);
+$("btn-guardar").addEventListener("click", () => guardar());
+// Los atajos van en los tooltips y se arman acá porque dependen del sistema (Ctrl o ⌘)
+// y del navegador (en Firefox, Ctrl+S no descarga). Solo los que no chocan con atajos
+// del propio navegador: por eso Nuevo no tiene (Ctrl+N abre una ventana).
+const MOD = /Mac|iPhone|iPad/.test(navigator.platform) ? "⌘" : "Ctrl";
+
+function conAtajo(boton, atajo) {
+  boton.dataset.ayuda += "\n" + atajo;
+}
+
+conAtajo(btnEjecutar, `${MOD}+Enter`);
+conAtajo($("btn-abrir"), `${MOD}+O`);
+if (PUEDE_SOBRESCRIBIR) {
+  conAtajo($("btn-guardar"), `${MOD}+S`);
+} else {
+  const boton = $("btn-guardar");
+  boton.classList.add("descarga");            // cambia el ícono
+  boton.querySelector(".etiqueta").textContent = "Descargar";
+  boton.dataset.ayuda = "Descarga una copia del programa como archivo .txt";
+  conAtajo(boton, `${MOD}+Shift+S`);
+}
+$("selector-archivo").addEventListener("change", (e) => {
+  const file = e.target.files[0];
+  e.target.value = "";                // para poder volver a elegir el mismo archivo
+  if (file) cargarArchivo(file);
+});
+
+// Ctrl+S, Ctrl+Shift+S y Ctrl+O (Cmd en Mac), estés donde estés en la página. Va en el
+// documento y no en el editor para que funcione también con el foco en la consola.
+document.addEventListener("keydown", (e) => {
+  if (!(e.ctrlKey || e.metaKey) || e.altKey) return;
+  const tecla = e.key.toLowerCase();
+  if (tecla === "s") {
+    e.preventDefault();               // si no, el navegador ofrece guardar la página
+    if (PUEDE_SOBRESCRIBIR || e.shiftKey) {
+      guardar(e.shiftKey);
+    } else {
+      // Ctrl+Shift+S sí descarga: ahí la copia nueva es lo que se está pidiendo.
+      avisar("Ya está guardado en este navegador. Para tenerlo en un archivo, usá " +
+             "Descargar.", "bien", 5000);
+    }
+  } else if (tecla === "o") {
+    e.preventDefault();
+    abrir();
+  } else if (e.key === "Enter") {
+    e.preventDefault();
+    ejecutar();                       // si ya hay algo corriendo, no hace nada
+  }
+});
+
+// Soltar un archivo en cualquier parte de la página lo abre. Sin esto el navegador se
+// iría de la página para mostrar el archivo, y se perdería lo que no estuviera guardado.
+document.addEventListener("dragover", (e) => {
+  if (hayArchivos(e)) e.preventDefault();
+});
+document.addEventListener("drop", (e) => {
+  if (!hayArchivos(e)) return;
+  e.preventDefault();
+  if (e.dataTransfer.files[0]) cargarArchivo(e.dataTransfer.files[0]);
+});
 
 // Si el programa está esperando un dato, hacer clic en cualquier parte del resultado
 // devuelve el cursor al campo: es lo que uno intenta cuando lo perdió.
@@ -480,3 +1050,6 @@ if (!INTERACTIVO) {
 definirModo({ reservadas: [], tipos: [], predefinidas: [] });
 crearEditor();
 arrancarWorker();
+window.Ayuda.cargar()
+  .then((datos) => mostrarNovedades(datos.novedades || []))
+  .catch(() => { /* sin referencia no hay novedades que mostrar */ });

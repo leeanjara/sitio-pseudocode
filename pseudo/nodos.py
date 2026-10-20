@@ -1,11 +1,46 @@
 """Nodos del árbol sintáctico que produce el parser."""
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 
 
 @dataclass
 class Nodo:
     linea: int
     col: int
+
+
+# ---------------------------------------------------------------------- Tipos
+#
+# Los tipos simples son textos: "Entero", "Real", "String"... Un arreglo no entra en un
+# texto (tiene un tamaño y un tipo adentro), así que tiene su propia clase.
+
+@dataclass(frozen=True)
+class TipoArreglo:
+    """'notas[10] Real' es TipoArreglo("Real", 10).
+
+    Una matriz 'm[3][4] Entero' es un arreglo de 3 filas, cada una un arreglo de 4
+    Enteros: TipoArreglo(TipoArreglo("Entero", 4), 3). Así m[i] da una fila y m[i][j] un
+    Entero sin que nadie tenga que saber cuántas dimensiones hay.
+
+    Es inmutable para que dos arreglos del mismo tipo sean iguales con ==, igual que dos
+    "Entero".
+    """
+    elemento: object        # un tipo simple (str) u otro TipoArreglo
+    tamanio: int
+
+    def __str__(self):
+        # Como se declara: 'arreglo Entero[3][4]'. Es lo que aparece en los mensajes.
+        tamanios, tipo = "", self
+        while isinstance(tipo, TipoArreglo):
+            tamanios += f"[{tipo.tamanio}]"
+            tipo = tipo.elemento
+        return f"arreglo {tipo}{tamanios}"
+
+
+def tipo_arreglo(tipo, tamanios):
+    """'m[3][4] Entero' -> TipoArreglo(TipoArreglo("Entero", 4), 3). Sin tamaños, el tipo."""
+    for tamanio in reversed(tamanios):
+        tipo = TipoArreglo(tipo, tamanio)
+    return tipo
 
 
 # ---------------------------------------------------------------- Expresiones
@@ -36,13 +71,30 @@ class Binaria(Nodo):
 
 @dataclass
 class Indice(Nodo):
-    """Acceso por posición: base[indice].
+    """Acceso por posición: base[indice], en un texto o en un arreglo.
 
-    Hoy la base solo puede ser texto, pero el nodo no lo sabe: cuando existan los
-    arreglos sirve igual, y 'base' puede ser a su vez otro Indice.
+    'base' puede ser a su vez otro Indice: m[i][j] es Indice(Indice(m, i), j).
     """
     base: Nodo
     indice: Nodo
+
+
+def desarmar(lugar):
+    """m[i][j] -> (Variable m, [Indice de m[i], Indice de m[i][j]]), de afuera hacia adentro.
+
+    Con una variable suelta devuelve (variable, []).
+    """
+    accesos = []
+    while isinstance(lugar, Indice):
+        accesos.append(lugar)
+        lugar = lugar.base
+    return lugar, accesos[::-1]
+
+
+def es_lugar(expr):
+    """Si 'expr' es un lugar donde se puede guardar un valor: x, notas[i], m[i][j], t[1]."""
+    raiz, _ = desarmar(expr)
+    return isinstance(raiz, Variable)
 
 
 @dataclass
@@ -69,9 +121,9 @@ class Unaria(Nodo):
 class Asignacion(Nodo):
     nombre: str
     expr: Nodo
-    # Posiciones entre corchetes del destino: vacío en 'x = 1', un elemento en
-    # 'texto[3] = ...'. Es una lista para que 'arreglo[i][j]' entre sin cambiar el nodo.
-    indices: list = field(default_factory=list)
+    # Cuando se le da valor a una posición ('notas[i] = 7', 'texto[1] = 'A'', 'm[i][j] = 0'),
+    # el lugar completo como Indice. En 'x = 1' queda en None y alcanza con 'nombre'.
+    lugar: Indice | None = None
 
 
 @dataclass
@@ -95,7 +147,7 @@ class Retornar(Nodo):
 
 @dataclass
 class Leer(Nodo):
-    variables: list
+    variables: list     # lugares: Variable o Indice (Leer(notas[i]))
 
 
 @dataclass
@@ -124,13 +176,13 @@ class Para(Nodo):
 @dataclass
 class DeclVar(Nodo):
     nombre: str
-    tipo: str
+    tipo: str | TipoArreglo
 
 
 @dataclass
 class Parametro(Nodo):
     nombre: str
-    tipo: str
+    tipo: str | TipoArreglo
     ref: bool
 
 

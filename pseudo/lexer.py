@@ -18,6 +18,9 @@ NOMBRES_DE_TIPO = {
     "Caracter": ("Caracter", "Char"),
 }
 TIPOS = {nombre for nombres in NOMBRES_DE_TIPO.values() for nombre in nombres}
+# El tema de la referencia (web/referencia.json) que explica cada tipo.
+TEMA_DE_TIPO = {"Entero": "entero", "Real": "real", "String": "string",
+                "Logico": "logico", "Caracter": "caracter"}
 # Sinónimo -> nombre interno ('Int' -> 'Entero').
 CANONICO = {nombre: canonico for canonico, nombres in NOMBRES_DE_TIPO.items()
             for nombre in nombres if nombre != canonico}
@@ -28,17 +31,21 @@ COMPUESTOS = {"+=": "+", "-=": "-", "*=": "*", "/=": "/", "%=": "%"}
 OPERADORES_SIMPLES = set("<>=+-*/%(),![]")
 
 # Símbolos de otros lenguajes: se reportan, pero se reemplazan por su equivalente
-# para que el resto del análisis pueda continuar.
+# para que el resto del análisis pueda continuar. El último dato es el tema de la
+# referencia que lo explica.
 EQUIVALENTES = {
-    "&&": ("KW", "Y", "usá 'Y' en lugar de '&&'"),
-    "||": ("KW", "O", "usá 'O' en lugar de '||'"),
-    "<>": ("OP", "!=", "usá '!=' en lugar de '<>'"),
+    "&&": ("KW", "Y", "usá 'Y' en lugar de '&&'", "logicos"),
+    "||": ("KW", "O", "usá 'O' en lugar de '||'", "logicos"),
+    "<>": ("OP", "!=", "usá '!=' en lugar de '<>'", "comparacion"),
 }
 PISTAS_SIMBOLOS = {
-    ";": "no hace falta ';' al final de las líneas",
-    ":": "no se usa ':'; el tipo va después del nombre, separado por un espacio (ej: 'edad Entero')",
-    "{": "los bloques no usan llaves; se cierran con 'Fin', 'Fin Si', 'Fin Mientras', etc.",
-    "}": "los bloques no usan llaves; se cierran con 'Fin', 'Fin Si', 'Fin Mientras', etc.",
+    ";": ("no hace falta ';' al final de las líneas", None),
+    ":": ("no se usa ':'; el tipo va después del nombre, separado por un espacio "
+          "(ej: 'edad Entero')", "var"),
+    "{": ("los bloques no usan llaves; se cierran con 'Fin', 'Fin Si', 'Fin Mientras', etc.",
+          "inicio-fin"),
+    "}": ("los bloques no usan llaves; se cierran con 'Fin', 'Fin Si', 'Fin Mientras', etc.",
+          "inicio-fin"),
 }
 # Palabras de cierre escritas todo junto.
 PALABRAS_JUNTAS = {
@@ -118,7 +125,7 @@ def tokenizar(fuente, diag):
                 while k < n and _es_letra_id(fuente[k]):
                     k += 1
                 diag.error(f"'{fuente[i:k]}' no es un nombre válido: los nombres no pueden "
-                           "empezar con un número", linea, col)
+                           "empezar con un número", linea, col, tema="var")
                 tokens.pop()
                 agregar("ID", fuente[i:k], col)
                 j = k
@@ -132,7 +139,8 @@ def tokenizar(fuente, diag):
             palabra = fuente[i:j]
             junta = PALABRAS_JUNTAS.get(normalizar(palabra))
             if junta:
-                diag.error(f"'{palabra}' se escribe separado: '{junta[0]} {junta[1]}'", linea, col)
+                diag.error(f"'{palabra}' se escribe separado: '{junta[0]} {junta[1]}'", linea, col,
+                           tema="mayusculas")
                 agregar("KW", junta[0], col)
                 agregar("KW", junta[1], col + len(junta[0]))
             elif palabra in PALABRAS_RESERVADAS:
@@ -152,7 +160,8 @@ def tokenizar(fuente, diag):
             if j < n and fuente[j] == '"':
                 i = j + 1
             else:
-                diag.error('texto sin cerrar: falta la comilla " del final', linea, col)
+                diag.error('texto sin cerrar: falta la comilla " del final', linea, col,
+                           tema="string")
                 i = j
             continue
 
@@ -164,20 +173,21 @@ def tokenizar(fuente, diag):
             if j < n and fuente[j] == "'":
                 i = j + 1
             else:
-                diag.error("caracter sin cerrar: falta la comilla ' del final", linea, col)
+                diag.error("caracter sin cerrar: falta la comilla ' del final", linea, col,
+                           tema="caracter")
                 i = j
             if len(contenido) == 1:
                 agregar("CARACTER", contenido, col)
             else:
                 diag.error("entre comillas simples va un solo caracter; para textos usá "
-                           'comillas dobles ("...")', linea, col)
+                           'comillas dobles ("...")', linea, col, tema="caracter")
                 agregar("CADENA", contenido, col)
             continue
 
         dos = fuente[i:i + 2]
         if dos in EQUIVALENTES:
-            tipo, valor, pista = EQUIVALENTES[dos]
-            diag.error(pista, linea, col)
+            tipo, valor, pista, tema = EQUIVALENTES[dos]
+            diag.error(pista, linea, col, tema)
             agregar(tipo, valor, col)
             i += 2
             continue
@@ -190,8 +200,8 @@ def tokenizar(fuente, diag):
             i += 1
             continue
 
-        pista = PISTAS_SIMBOLOS.get(c)
-        diag.error(f"símbolo no válido '{c}'" + (f": {pista}" if pista else ""), linea, col)
+        pista, tema = PISTAS_SIMBOLOS.get(c, (None, None))
+        diag.error(f"símbolo no válido '{c}'" + (f": {pista}" if pista else ""), linea, col, tema)
         i += 1
 
     col = i - inicio_linea + 1
@@ -203,7 +213,8 @@ def tokenizar(fuente, diag):
         if a.tipo == "KW" and b.tipo == "ID" and a.linea == b.linea:
             correcto = CORRECCIONES_TRAS.get(a.valor, {}).get(normalizar(b.valor))
             if correcto:
-                diag.error(f"se escribe '{a.valor} {correcto}' (con mayúscula)", b.linea, b.col)
+                diag.error(f"se escribe '{a.valor} {correcto}' (con mayúscula)", b.linea, b.col,
+                           tema="mayusculas")
                 b.tipo, b.valor = "KW", correcto
 
     _un_solo_nombre_por_tipo(tokens, diag)
@@ -217,7 +228,7 @@ def _un_solo_nombre_por_tipo(tokens, diag):
     queda parejo sin que el verificador imponga un nombre. La regla es por tipo: usar
     'Int' para los enteros y 'Real' para los reales está bien.
     """
-    for nombres in NOMBRES_DE_TIPO.values():
+    for canonico, nombres in NOMBRES_DE_TIPO.items():
         usos = {nombre: [t for t in tokens if t.tipo == "TIPO" and t.valor == nombre]
                 for nombre in nombres}
         usados = [nombre for nombre in nombres if usos[nombre]]
@@ -231,4 +242,5 @@ def _un_solo_nombre_por_tipo(tokens, diag):
             for t in usos[nombre]:
                 diag.error(f"este programa ya usa '{elegido}' (línea {primero.linea}): "
                            f"'{nombre}' y '{elegido}' son el mismo tipo, pero hay que elegir "
-                           "uno solo y usarlo en todo el programa", t.linea, t.col)
+                           "uno solo y usarlo en todo el programa", t.linea, t.col,
+                           TEMA_DE_TIPO[canonico])

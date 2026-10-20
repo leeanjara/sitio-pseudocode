@@ -10,6 +10,8 @@ y no necesitan tener Python instalado.
 import http.server
 import json
 import shutil
+import subprocess
+import tempfile
 import webbrowser
 from pathlib import Path
 
@@ -67,30 +69,188 @@ class Manejador(http.server.SimpleHTTPRequestHandler):
         pass    # no ensucia la consola con cada archivo pedido
 
 
-def empaquetar(destino="sitio"):
-    """Arma una carpeta lista para subir a cualquier hosting estático.
+# Lista de los archivos que armó la última corrida de --empaquetar. Con eso se puede
+# borrar lo que ya no va sin tocar nada que no sea nuestro.
+REGISTRO = ".pseudo-sitio.json"
+CARPETA_POR_DEFECTO = RAIZ / "sitio"
 
-    Queda index.html en la raíz y pseudo/ adentro, así no depende de dónde se publique.
+
+# ---------------------------------------------------------------- git
+
+def _git(*args):
+    """Corre git sobre el proyecto y devuelve lo que imprime. Falla con RuntimeError."""
+    try:
+        r = subprocess.run(["git", "-C", str(RAIZ), *args], capture_output=True, text=True,
+                           encoding="utf-8", errors="replace")
+    except OSError as e:
+        raise RuntimeError("git no está instalado") from e
+    if r.returncode != 0:
+        raise RuntimeError(r.stderr.strip() or f"git {' '.join(args)} falló")
+    # rstrip y no strip: en 'git status --porcelain' el espacio del principio es parte del
+    # formato (" M archivo"), y comérselo corre las columnas.
+    return r.stdout.rstrip()
+
+
+def _plural(n, singular, plural):
+    return f"{n} {singular if n == 1 else plural}"
+
+
+def revisar_para_publicar():
+    """¿Lo que se va a publicar es exactamente lo que está guardado y subido a main?
+
+    Devuelve (problemas, avisos, version). Los problemas frenan el empaquetado, salvo que
+    se fuerce; los avisos solo se muestran. El caso que se quiere evitar: publicar desde
+    una computadora algo que no está subido, y que después se pise al publicar desde otra.
     """
-    salida = (RAIZ / destino).resolve()
-    if salida == RAIZ or RAIZ in salida.parents and salida.name == "":
-        print("Elegí una carpeta de destino distinta de la raíz del proyecto.")
-        return 1
+    problemas, avisos = [], []
+    try:
+        rama = _git("rev-parse", "--abbrev-ref", "HEAD")
+    except RuntimeError:
+        avisos.append("el proyecto no está en un repositorio de git (o git no está instalado): "
+                      "no se pudo comprobar qué versión se publica")
+        return problemas, avisos, None
 
-    if salida.exists():
-        shutil.rmtree(salida)
-    shutil.copytree(RAIZ / "web", salida)
-    shutil.copytree(RAIZ / "pseudo", salida / "pseudo",
-                    ignore=shutil.ignore_patterns("__pycache__", "*.pyc"))
-    (salida / "pseudo" / MANIFIESTO).write_text(json.dumps(listar_modulos()), encoding="utf-8")
-    (salida / "_headers").write_text(ENCABEZADOS, encoding="utf-8")
+    if rama != "main":
+        problemas.append(f"estás en la rama '{rama}', no en main: se publicaría esa versión")
+
+    # Solo importa lo que va al sitio: un cambio en el README no altera la página.
+    sucios = _git("status", "--porcelain", "--", "pseudo", "web").splitlines()
+    if sucios:
+        lista = ", ".join(linea[3:] for linea in sucios[:4]) + (" ..." if len(sucios) > 4 else "")
+        problemas.append(f"hay cambios sin commitear en pseudo/ o web/ ({lista}): lo "
+                         "publicado no quedaría guardado en ningún commit")
+
+    try:
+        _git("fetch", "--quiet")
+    except RuntimeError:
+        avisos.append("no se pudo consultar el remoto (¿sin conexión?): no se comprobó si hay "
+                      "cambios sin subir o sin bajar")
+    try:
+        _git("rev-parse", "--abbrev-ref", "@{u}")
+    except RuntimeError:
+        problemas.append(f"la rama '{rama}' no está subida al remoto (git push)")
+    else:
+        adelante = int(_git("rev-list", "--count", "@{u}..HEAD"))
+        atras = int(_git("rev-list", "--count", "HEAD..@{u}"))
+        if adelante:
+            problemas.append(f"hay {_plural(adelante, 'commit', 'commits')} sin subir (git push)")
+        if atras:
+            problemas.append(f"el remoto tiene {_plural(atras, 'commit', 'commits')} que no "
+                             "tenés: podrías pisar una versión más nueva publicada desde otra "
+                             "computadora (git pull)")
+
+    version = {
+        "commit": _git("rev-parse", "--short", "HEAD"),
+        "fecha": _git("log", "-1", "--format=%cs"),
+        "rama": rama,
+        "sin_commitear": bool(sucios),
+    }
+    return problemas, avisos, version
+
+
+# ------------------------------------------------------------- armado
+
+def _armar(carpeta, version=None):
+    """Arma el sitio completo en una carpeta vacía."""
+    sin_cache = shutil.ignore_patterns("__pycache__", "*.pyc")
+    shutil.copytree(RAIZ / "web", carpeta, dirs_exist_ok=True, ignore=sin_cache)
+    shutil.copytree(RAIZ / "pseudo", carpeta / "pseudo", dirs_exist_ok=True, ignore=sin_cache)
+    (carpeta / "pseudo" / MANIFIESTO).write_text(json.dumps(listar_modulos()), encoding="utf-8")
+    (carpeta / "_headers").write_text(ENCABEZADOS, encoding="utf-8")
     # Sin esto, GitHub Pages pasa el sitio por Jekyll, que no publica los archivos que
     # empiezan con guion bajo: __init__.py y __main__.py darían 404 y la página no carga.
-    (salida / ".nojekyll").write_text("", encoding="utf-8")
+    (carpeta / ".nojekyll").write_text("", encoding="utf-8")
+    # La página lo muestra, para saber de qué versión salió lo que está publicado.
+    if version is not None:
+        (carpeta / "version.json").write_text(json.dumps(version), encoding="utf-8")
 
-    print(f"Sitio armado en {salida}")
-    print("Subí el contenido de esa carpeta a GitHub Pages, Netlify o Cloudflare Pages.")
-    print("Acordate de volver a correrlo cada vez que cambies algo de pseudo/.")
+
+def _leer_registro(salida):
+    """Lo que armamos la vez pasada en esta carpeta, o None si nunca escribimos acá."""
+    registro = salida / REGISTRO
+    if not registro.is_file():
+        return None
+    try:
+        rutas = json.loads(registro.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return None
+    # Solo rutas que queden adentro de la carpeta: el registro nunca puede servir para
+    # borrar algo de afuera, aunque alguien lo haya editado a mano.
+    return {r for r in rutas if isinstance(r, str)
+            and salida in (salida / r).resolve().parents}
+
+
+def empaquetar(destino=None, forzar=False):
+    """Arma la página lista para subir a cualquier hosting estático.
+
+    Queda index.html en la raíz y pseudo/ adentro, así no depende de dónde se publique.
+    Si la carpeta ya existe **no la borra**: reemplaza los archivos del sitio y solo
+    elimina los que había generado una corrida anterior y ya no van. Así se puede apuntar
+    directo a la carpeta de otro repositorio (el de GitHub Pages) sin tocar su .git ni
+    nada que no sea del sitio.
+
+    Antes de armar nada revisa con git que lo publicado esté commiteado y subido a main
+    (ver revisar_para_publicar); con forzar=True esos problemas pasan a ser avisos.
+    """
+    salida = CARPETA_POR_DEFECTO if destino is None else Path(destino).expanduser().resolve()
+    fuentes = (RAIZ / "pseudo", RAIZ / "web")
+    if salida == RAIZ or any(salida == f or f in salida.parents for f in fuentes):
+        print("La carpeta de destino no puede ser la raíz del proyecto ni estar dentro de "
+              "pseudo/ o web/: el sitio se mezclaría con el código.")
+        return 1
+    if salida.exists() and not salida.is_dir():
+        print(f"{salida} existe y no es una carpeta.")
+        return 1
+
+    problemas, avisos, version = revisar_para_publicar()
+    if problemas and not forzar:
+        print("No se armó el sitio:")
+        for p in problemas:
+            print(f"  - {p}")
+        print("Resolvelo y volvé a correrlo, o agregá --forzar si igual querés armarlo.")
+        return 1
+    for a in (problemas if forzar else []) + avisos:
+        print(f"Aviso: {a}")
+
+    anteriores = _leer_registro(salida) if salida.exists() else None
+    ajena = anteriores is None and salida.exists() and any(salida.iterdir())
+
+    with tempfile.TemporaryDirectory() as temporal:
+        armado = Path(temporal)
+        _armar(armado, version)
+        nuevos = sorted(p.relative_to(armado).as_posix()
+                        for p in armado.rglob("*") if p.is_file())
+
+        salida.mkdir(parents=True, exist_ok=True)
+        sobrantes = sorted((anteriores or set()) - set(nuevos))
+        for rel in sobrantes:
+            (salida / rel).unlink(missing_ok=True)
+        # Las carpetas que quedaron vacías por lo que se borró, de la más honda a la más alta.
+        carpetas = {(salida / rel).parent for rel in sobrantes}
+        for carpeta in sorted(carpetas, key=lambda c: len(c.parts), reverse=True):
+            while carpeta != salida and salida in carpeta.parents:
+                try:
+                    carpeta.rmdir()             # solo funciona si está vacía
+                except OSError:
+                    break
+                carpeta = carpeta.parent
+
+        for rel in nuevos:
+            (salida / rel).parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(armado / rel, salida / rel)
+
+    (salida / REGISTRO).write_text(json.dumps(nuevos, indent=1), encoding="utf-8")
+
+    print(f"Sitio armado en {salida} ({len(nuevos)} archivos).")
+    if len(sobrantes) == 1:
+        print("Se borró 1 archivo de la vez anterior que ya no va.")
+    elif sobrantes:
+        print(f"Se borraron {len(sobrantes)} archivos de la vez anterior que ya no van.")
+    if ajena:
+        print("Esa carpeta ya tenía otras cosas: se reemplazaron los archivos del sitio y no se "
+              "borró nada más. Si antes copiabas el sitio a mano, puede haber quedado algún "
+              "archivo viejo; de ahora en adelante los que sobren se borran solos.")
+    print("Acordate de volver a correrlo cada vez que cambies algo de pseudo/ o web/.")
     return 0
 
 

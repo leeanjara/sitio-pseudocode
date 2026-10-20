@@ -95,7 +95,11 @@ def _unidad(marcas):
 
 
 def verificar(fuente, sangria, diag):
-    reportar = diag.error if NIVEL == "error" else diag.advertencia
+    anotar = diag.error if NIVEL == "error" else diag.advertencia
+
+    def reportar(mensaje, linea, col):
+        anotar(mensaje, linea, col, tema="sangria")
+
     marcas = _recolectar(fuente, sangria)
     if not marcas or not _revisar_mezcla(marcas, reportar):
         return
