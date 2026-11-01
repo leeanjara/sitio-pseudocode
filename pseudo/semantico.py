@@ -10,17 +10,17 @@ from .predefinidas import PREDEFINIDAS
 RESERVADAS_POR_FORMA = {normalizar(p): p for p in PALABRAS_RESERVADAS | TIPOS}
 
 NUMERICOS = {"Entero", "Real"}
-TEXTO = {"String", "Caracter"}
+TEXTO = {"Cadena", "Caracter"}
 # Tipos simples que se pueden indexar con [ ] y qué sale de adentro. Los arreglos también
 # se indexan, pero su elemento lo dice su propio tipo: ver elemento_de().
-ELEMENTO_DE = {"String": "Caracter"}
+ELEMENTO_DE = {"Cadena": "Caracter"}
 # Conversiones explícitas: tipo al que se convierte -> tipos desde los que se puede.
 # A Logico no se convierte: un Logico sale de una comparación.
 CONVERSIONES = {
-    "String": {"String", "Entero", "Real", "Caracter", "Logico"},
-    "Entero": {"Entero", "Real", "String", "Caracter"},
-    "Real": {"Real", "Entero", "String"},
-    "Caracter": {"Caracter", "Entero", "String"},
+    "Cadena": {"Cadena", "Entero", "Real", "Caracter", "Logico"},
+    "Entero": {"Entero", "Real", "Cadena", "Caracter"},
+    "Real": {"Real", "Entero", "Cadena"},
+    "Caracter": {"Caracter", "Entero", "Cadena"},
 }
 COMPARADORES = {"==", "!=", "<", ">", "<=", ">="}
 SUBPROGRAMAS = ("funcion", "procedimiento")
@@ -43,7 +43,7 @@ def es_arreglo(tipo):
 def asignable(destino, origen):
     if destino is None or origen is None or destino == origen:
         return True
-    return (destino, origen) in {("Real", "Entero"), ("String", "Caracter")}
+    return (destino, origen) in {("Real", "Entero"), ("Cadena", "Caracter")}
 
 
 def articulo(sub):
@@ -412,7 +412,7 @@ class Analizador:
         if asignable(destino, origen):
             return
         extra = " (se perdería la parte decimal)" if (destino, origen) == ("Entero", "Real") else ""
-        # Si se arregla convirtiendo (Entero(x), String(x)...), lo explica Conversiones; si
+        # Si se arregla convirtiendo (Entero(x), Cadena(x)...), lo explica Conversiones; si
         # no, el tema del tipo que se esperaba.
         if es_arreglo(destino) or es_arreglo(origen):
             tema = "arreglos"
@@ -444,7 +444,7 @@ class Analizador:
 
     def tipo_conversion(self, e):
         origen = self.tipo(e.expr)
-        # El intérprete lo necesita: en ejecución un Caracter y un String de una letra son
+        # El intérprete lo necesita: en ejecución un Caracter y un Cadena de una letra son
         # iguales, pero cada uno tiene sus propias reglas y sus propios mensajes de error.
         e.origen = origen
         if e.destino not in CONVERSIONES:
@@ -529,7 +529,7 @@ class Analizador:
                                 e.linea, e.col, tema="comparacion")
             return "Logico"
         if op == "+" and a in TEXTO and b in TEXTO:
-            return "String"
+            return "Cadena"
         # Si viene de 'x += 1' los mensajes hablan de '+=', que es lo que escribió el alumno.
         escrito = getattr(e, "operador_compuesto", op)
         tema = "contadores" if escrito != op else "aritmeticos"
@@ -544,7 +544,7 @@ class Analizador:
         mensaje = f"no se puede usar '{escrito}' entre un {a} y un {b}"
         if escrito == "+" and (a in TEXTO or b in TEXTO):
             mensaje += "; para mostrar textos y números juntos separalos con comas en Mostrar(...)"
-            tema = "string"
+            tema = "cadena"
         self.diag.error(mensaje, e.linea, e.col, tema)
         return None
 

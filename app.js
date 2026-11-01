@@ -3,7 +3,7 @@
 // El programa con el que arranca la página.
 const EJEMPLO = `Programa saludo
 Var
-    nombre String
+    nombre Cadena
     veces, i Entero
 Inicio
     Mostrar("¿Cómo te llamás?")

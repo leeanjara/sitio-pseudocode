@@ -169,7 +169,7 @@ class Interprete:
     def convertir_explicito(self, e, valor):
         """Entero(x), Cadena(x)... El análisis ya garantizó que la conversión existe."""
         destino, origen, escrito = e.destino, e.origen, e.escrito
-        if destino == "String":
+        if destino == "Cadena":
             return formatear(valor)
         if destino == "Entero":
             if origen == "Real":
@@ -181,14 +181,14 @@ class Interprete:
                                          "que sea un dígito, de '0' a '9'", e,
                                          tema="conversiones")
                 return int(valor)
-            if origen == "String":
+            if origen == "Cadena":
                 if not NUMERO_ENTERO.fullmatch(valor.strip()):
                     raise ErrorEjecucion(f'{escrito}("{valor}"): ese texto no es un número '
                                          "entero", e, tema="conversiones")
                 return int(valor.strip())
             return valor
         if destino == "Real":
-            if origen == "String":
+            if origen == "Cadena":
                 limpio = valor.strip().replace(",", ".")
                 if not NUMERO_REAL.fullmatch(limpio):
                     raise ErrorEjecucion(f'{escrito}("{valor}"): ese texto no es un número', e,
@@ -198,13 +198,13 @@ class Interprete:
         if destino == "Caracter":
             if origen == "Entero":
                 # El dígito, no el código: Caracter(7) da '7'. Un número de más de una
-                # cifra no entra en un solo caracter; para eso está String(x).
+                # cifra no entra en un solo caracter; para eso está Cadena(x).
                 if not 0 <= valor <= 9:
                     raise ErrorEjecucion(f"{escrito}({valor}): solo se convierte un número de "
                                          "una cifra, de 0 a 9 (para más cifras usá "
-                                         "String(x))", e, tema="conversiones")
+                                         "Cadena(x))", e, tema="conversiones")
                 return str(valor)
-            if origen == "String" and len(valor) != 1:
+            if origen == "Cadena" and len(valor) != 1:
                 raise ErrorEjecucion(f'{escrito}("{valor}"): el texto tiene que tener un solo '
                                      f"caracter, y tiene {len(valor)}", e, tema="conversiones")
             return valor

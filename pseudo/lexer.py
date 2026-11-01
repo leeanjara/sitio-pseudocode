@@ -13,13 +13,13 @@ PALABRAS_RESERVADAS = {
 NOMBRES_DE_TIPO = {
     "Entero": ("Entero", "Int"),
     "Real": ("Real", "Float"),
-    "String": ("String", "Cadena"),
+    "Cadena": ("Cadena", "String"),
     "Logico": ("Logico", "Bool"),
     "Caracter": ("Caracter", "Char"),
 }
 TIPOS = {nombre for nombres in NOMBRES_DE_TIPO.values() for nombre in nombres}
 # El tema de la referencia (web/referencia.json) que explica cada tipo.
-TEMA_DE_TIPO = {"Entero": "entero", "Real": "real", "String": "string",
+TEMA_DE_TIPO = {"Entero": "entero", "Real": "real", "Cadena": "cadena",
                 "Logico": "logico", "Caracter": "caracter"}
 # Sinónimo -> nombre interno ('Int' -> 'Entero').
 CANONICO = {nombre: canonico for canonico, nombres in NOMBRES_DE_TIPO.items()
@@ -161,7 +161,7 @@ def tokenizar(fuente, diag):
                 i = j + 1
             else:
                 diag.error('texto sin cerrar: falta la comilla " del final', linea, col,
-                           tema="string")
+                           tema="cadena")
                 i = j
             continue
 

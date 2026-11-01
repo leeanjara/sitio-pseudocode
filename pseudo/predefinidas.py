@@ -32,6 +32,12 @@ def _instr(buscar, donde, posicion):
     return donde.count(buscar)
 
 
+def _substr(entrada, cantidad):
+    """Los primeros 'cantidad' caracteres de 'entrada'; si no alcanzan, los que haya.
+    Sin el max, una cantidad negativa recortaría desde el final, como hace Python."""
+    return entrada[:max(cantidad, 0)]
+
+
 def _firma(nombre, parametros, tipo_retorno, implementacion):
     sub = N.Subprograma(
         0, 0, nombre, True,
@@ -41,10 +47,12 @@ def _firma(nombre, parametros, tipo_retorno, implementacion):
 
 
 PREDEFINIDAS = dict([
-    _firma("Len", [("texto", "String", False)], "Entero", len),
-    _firma("Upper", [("texto", "String", False)], "String", str.upper),
-    _firma("Lower", [("texto", "String", False)], "String", str.lower),
-    _firma("InStr", [("buscar", "String", False),
-                     ("donde", "String", False),
+    _firma("Len", [("texto", "Cadena", False)], "Entero", len),
+    _firma("Upper", [("texto", "Cadena", False)], "Cadena", str.upper),
+    _firma("Lower", [("texto", "Cadena", False)], "Cadena", str.lower),
+    _firma("InStr", [("buscar", "Cadena", False),
+                     ("donde", "Cadena", False),
                      ("posicion", "Entero", True)], "Entero", _instr),
+    _firma("SubStr", [("entrada", "Cadena", False),
+                      ("cantidad", "Entero", False)], "Cadena", _substr),
 ])

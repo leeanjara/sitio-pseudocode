@@ -10,7 +10,7 @@ class Nodo:
 
 # ---------------------------------------------------------------------- Tipos
 #
-# Los tipos simples son textos: "Entero", "Real", "String"... Un arreglo no entra en un
+# Los tipos simples son textos: "Entero", "Real", "Cadena"... Un arreglo no entra en un
 # texto (tiene un tamaño y un tipo adentro), así que tiene su propia clase.
 
 @dataclass(frozen=True)

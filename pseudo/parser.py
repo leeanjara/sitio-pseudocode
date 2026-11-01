@@ -61,11 +61,11 @@ SUGERENCIAS_TIPO = {
     "entero": "Entero", "int": "Int", "integer": "Int",
     "flotante": "Real", "float": "Float", "real": "Real", "double": "Float",
     "decimal": "Real",
-    "string": "String", "cadena": "Cadena", "texto": "String", "str": "String",
+    "cadena": "Cadena", "string": "String", "texto": "Cadena", "str": "Cadena",
     "booleano": "Logico", "bool": "Bool", "boolean": "Bool", "logico": "Logico",
     "caracter": "Caracter", "char": "Char",
 }
-TIPOS_TEXTO = ("Entero (o Int), Real (o Float), String (o Cadena), Logico (o Bool) "
+TIPOS_TEXTO = ("Entero (o Int), Real (o Float), Cadena (o String), Logico (o Bool) "
                "o Caracter (o Char)")
 # Cómo se declaran los arreglos en otras notaciones: se reconoce para explicar la de acá.
 NOMBRES_DE_ARREGLO = {"arreglo", "array", "vector", "matriz", "dimension"}
@@ -798,7 +798,7 @@ class Parser:
 
     def parse_primario(self):
         tok = self.act
-        literales = {"ENTERO": "Entero", "FLOTANTE": "Real", "CADENA": "String",
+        literales = {"ENTERO": "Entero", "FLOTANTE": "Real", "CADENA": "Cadena",
                      "CARACTER": "Caracter"}
         if tok.tipo in literales:
             self.avanzar()

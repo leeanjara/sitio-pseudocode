@@ -152,7 +152,7 @@
           ],
           "resumen": "Abre la sección donde se declaran las variables. Toda variable tiene que declararse antes de usarse.",
           "sintaxis": "Var\n    <nombre1>, <nombre2> <Tipo>",
-          "ejemplo": "Programa datos\nVar\n    nombre, apellido String\n    edad Entero\n    altura Real\nInicio\n    edad = 20\n    Mostrar(edad)\nFin",
+          "ejemplo": "Programa datos\nVar\n    nombre, apellido Cadena\n    edad Entero\n    altura Real\nInicio\n    edad = 20\n    Mostrar(edad)\nFin",
           "salida": "20",
           "recorda": "Varias variables del mismo tipo van en una línea separadas por comas; el tipo va al final.",
           "notas": [
@@ -214,12 +214,12 @@
           ]
         },
         {
-          "id": "string",
-          "titulo": "String (o Cadena)",
-          "corto": "String",
+          "id": "cadena",
+          "titulo": "Cadena (o String)",
+          "corto": "Cadena",
           "cubre": [
-            "String",
-            "Cadena"
+            "Cadena",
+            "String"
           ],
           "buscar": [
             "texto",
@@ -229,13 +229,13 @@
             "concatenar",
             "juntar textos"
           ],
-          "resumen": "Texto, entre comillas dobles. String y Cadena son exactamente el mismo tipo: elegí uno y usalo en todo el programa.",
-          "sintaxis": "<nombre> String\n<nombre> Cadena",
-          "ejemplo": "Programa textos\nVar\n    saludo, nombre, mensaje String\nInicio\n    nombre = \"Ana\"\n    saludo = \"Hola \"\n    mensaje = saludo + nombre\n    Mostrar(mensaje)\nFin",
+          "resumen": "Texto, entre comillas dobles. Cadena y String son exactamente el mismo tipo: elegí uno y usalo en todo el programa.",
+          "sintaxis": "<nombre> Cadena\n<nombre> String",
+          "ejemplo": "Programa textos\nVar\n    saludo, nombre, mensaje Cadena\nInicio\n    nombre = \"Ana\"\n    saludo = \"Hola \"\n    mensaje = saludo + nombre\n    Mostrar(mensaje)\nFin",
           "salida": "Hola Ana",
-          "recorda": "Con + se pegan dos textos, pero no se puede sumar texto con número: para eso usá las comas de Mostrar, o convertí el número con String(x).",
+          "recorda": "Con + se pegan dos textos, pero no se puede sumar texto con número: para eso usá las comas de Mostrar, o convertí el número con Cadena(x).",
           "notas": [
-            "Son el mismo tipo, pero no se pueden mezclar en un mismo programa: si empezaste con String, seguí con String.",
+            "Son el mismo tipo, pero no se pueden mezclar en un mismo programa: si empezaste con Cadena, seguí con Cadena.",
             "Para llegar a un carácter suelto se usan corchetes; está explicado en 'Posiciones de un texto'."
           ]
         },
@@ -259,7 +259,7 @@
           "salida": "A",
           "recorda": "Comillas simples para un carácter ('a'); comillas dobles para texto (\"hola\").",
           "notas": [
-            "Un Caracter se puede guardar en un String; al revés no.",
+            "Un Caracter se puede guardar en un Cadena; al revés no.",
             "Sacar una posición de un texto da un Caracter: inicial = nombre[1].",
             "Char es otro nombre para el mismo tipo. Se puede usar cualquiera de los dos, pero siempre el mismo en todo el programa: Caracter y Char no se mezclan."
           ]
@@ -316,7 +316,7 @@
           ],
           "resumen": "Escribe en pantalla. Acepta varias cosas separadas por comas y las pega una atrás de otra.",
           "sintaxis": "Mostrar(<valor1>, <valor2>, ...)",
-          "ejemplo": "Programa mostrar_datos\nVar\n    nombre String\n    edad Entero\n    altura Real\nInicio\n    nombre = \"Ana\"\n    edad = 20\n    altura = 1.65\n    Mostrar(\"Hola \", nombre, \", tenés \", edad, \" años y medís \", altura, \"m\")\nFin",
+          "ejemplo": "Programa mostrar_datos\nVar\n    nombre Cadena\n    edad Entero\n    altura Real\nInicio\n    nombre = \"Ana\"\n    edad = 20\n    altura = 1.65\n    Mostrar(\"Hola \", nombre, \", tenés \", edad, \" años y medís \", altura, \"m\")\nFin",
           "salida": "Hola Ana, tenés 20 años y medís 1.65m",
           "recorda": "Las comas son la forma de mezclar texto con números. Con + no se puede.",
           "notas": [
@@ -641,7 +641,7 @@
           ],
           "resumen": "Como una función, pero no devuelve nada. Se usa como una instrucción suelta.",
           "sintaxis": "Procedimiento <nombre>(<param> <Tipo>, ...)\nInicio\n    <instrucciones>\nFin",
-          "ejemplo": "Programa saludar\nProcedimiento saludar_a(nombre String)\nInicio\n    Mostrar(\"Hola \", nombre, \"!\")\nFin\nInicio\n    saludar_a(\"Ana\")\n    saludar_a(\"Luis\")\nFin",
+          "ejemplo": "Programa saludar\nProcedimiento saludar_a(nombre Cadena)\nInicio\n    Mostrar(\"Hola \", nombre, \"!\")\nFin\nInicio\n    saludar_a(\"Ana\")\n    saludar_a(\"Luis\")\nFin",
           "salida": "Hola Ana!\nHola Luis!",
           "recorda": "No se puede usar dentro de una expresión: x = mi_procedimiento(1) es un error.",
           "notas": [
@@ -699,7 +699,7 @@
           ],
           "resumen": "Cuántos caracteres tiene un texto.",
           "sintaxis": "Len(<texto>) : Entero",
-          "ejemplo": "Programa largo\nVar\n    frase String\n    cantidad Entero\nInicio\n    frase = \"hola mundo\"\n    cantidad = Len(frase)\n    Mostrar(\"Tiene \", cantidad, \" caracteres\")     // 10\nFin",
+          "ejemplo": "Programa largo\nVar\n    frase Cadena\n    cantidad Entero\nInicio\n    frase = \"hola mundo\"\n    cantidad = Len(frase)\n    Mostrar(\"Tiene \", cantidad, \" caracteres\")     // 10\nFin",
           "salida": "Tiene 10 caracteres",
           "recorda": "Los espacios también cuentan.",
           "notas": []
@@ -717,8 +717,8 @@
             "uppercase"
           ],
           "resumen": "Devuelve el texto en mayúsculas. No cambia el original.",
-          "sintaxis": "Upper(<texto>) : String",
-          "ejemplo": "Programa mayusculas\nVar\n    nombre, grito String\nInicio\n    nombre = \"ana\"\n    grito = Upper(nombre)\n    Mostrar(grito, \" y \", nombre)     // ANA y ana\nFin",
+          "sintaxis": "Upper(<texto>) : Cadena",
+          "ejemplo": "Programa mayusculas\nVar\n    nombre, grito Cadena\nInicio\n    nombre = \"ana\"\n    grito = Upper(nombre)\n    Mostrar(grito, \" y \", nombre)     // ANA y ana\nFin",
           "salida": "ANA y ana",
           "recorda": "Sirve para comparar sin que importen las mayúsculas: Si(Upper(a) == Upper(b)).",
           "notas": []
@@ -736,8 +736,8 @@
             "lowercase"
           ],
           "resumen": "Devuelve el texto en minúsculas. No cambia el original.",
-          "sintaxis": "Lower(<texto>) : String",
-          "ejemplo": "Programa minusculas\nVar\n    respuesta String\nInicio\n    respuesta = \"SI\"\n    Si(Lower(respuesta) == \"si\")\n        Mostrar(\"Dijo que sí\")\n    Fin Si\nFin",
+          "sintaxis": "Lower(<texto>) : Cadena",
+          "ejemplo": "Programa minusculas\nVar\n    respuesta Cadena\nInicio\n    respuesta = \"SI\"\n    Si(Lower(respuesta) == \"si\")\n        Mostrar(\"Dijo que sí\")\n    Fin Si\nFin",
           "salida": "Dijo que sí",
           "recorda": "Sirve para comparar respuestas sin que importen las mayúsculas, como en el ejemplo.",
           "notas": []
@@ -769,6 +769,32 @@
           ]
         },
         {
+          "id": "substr",
+          "titulo": "SubStr",
+          "corto": "SubStr",
+          "cubre": [
+            "SubStr"
+          ],
+          "buscar": [
+            "recortar un texto",
+            "cortar un texto",
+            "primeros caracteres",
+            "primeras letras",
+            "substring",
+            "subcadena",
+            "parte de un texto"
+          ],
+          "resumen": "Devuelve los primeros caracteres de un texto. No cambia el original.",
+          "sintaxis": "SubStr(<entrada>, <cantidad>) : Cadena",
+          "ejemplo": "Programa recortar\nVar\n    nombre, corto Cadena\nInicio\n    nombre = \"Mariana\"\n    corto = SubStr(nombre, 3)\n    Mostrar(corto, \" y \", nombre)     // Mar y Mariana\n    Mostrar(SubStr(\"Ana\", 10))        // Ana: no hay 10, devuelve los que hay\nFin",
+          "salida": "Mar y Mariana\nAna",
+          "recorda": "Pedir más caracteres de los que tiene el texto no es un error: devuelve los que haya.",
+          "notas": [
+            "Siempre empieza desde el primer caracter.",
+            "Con una cantidad de 0 o negativa devuelve el texto vacío."
+          ]
+        },
+        {
           "id": "posiciones",
           "titulo": "Posiciones de un texto: texto[i]",
           "corto": "Posiciones: texto[i]",
@@ -784,11 +810,11 @@
           ],
           "resumen": "Entre corchetes se llega a un carácter suelto del texto, para leerlo o para cambiarlo. Se numeran desde 1.",
           "sintaxis": "<texto>[<posicion>]\n<texto>[<posicion>] = <caracter>",
-          "ejemplo": "Programa iniciales\nVar\n    nombre String\n    inicial Caracter\n    i Entero\nInicio\n    nombre = \"ana\"\n    inicial = nombre[1]        // 'a': la primera, no la 0\n    nombre[1] = 'A'            // ahora nombre vale \"Ana\"\n    Mostrar(inicial, \" -> \", nombre)\n\n    Para (i = 1, i++, i <= Len(nombre))\n        Mostrar(nombre[i])\n    Fin Para\nFin",
+          "ejemplo": "Programa iniciales\nVar\n    nombre Cadena\n    inicial Caracter\n    i Entero\nInicio\n    nombre = \"ana\"\n    inicial = nombre[1]        // 'a': la primera, no la 0\n    nombre[1] = 'A'            // ahora nombre vale \"Ana\"\n    Mostrar(inicial, \" -> \", nombre)\n\n    Para (i = 1, i++, i <= Len(nombre))\n        Mostrar(nombre[i])\n    Fin Para\nFin",
           "salida": "a -> Ana\nA\nn\na",
           "recorda": "La primera posición es la 1 y la última es Len(texto). No hay posición 0.",
           "notas": [
-            "Lo que sale de una posición es un Caracter, no un String: por eso se asigna con comillas simples ('A') y no dobles.",
+            "Lo que sale de una posición es un Caracter, no un Cadena: por eso se asigna con comillas simples ('A') y no dobles.",
             "La posición puede ser cualquier expresión Entera: texto[i], texto[i + 1], texto[Len(texto)].",
             "Pedir una posición que no existe corta el programa y avisa cuántos caracteres tenía el texto.",
             "Cambiar una posición no sirve para darle su primer valor a la variable: el texto ya tiene que existir.",
@@ -804,7 +830,7 @@
       "temas": [
         {
           "id": "conversiones",
-          "titulo": "Conversiones: Entero(x), Real(x), String(x), Caracter(x)",
+          "titulo": "Conversiones: Entero(x), Real(x), Cadena(x), Caracter(x)",
           "corto": "Conversiones",
           "cubre": [],
           "buscar": [
@@ -822,17 +848,17 @@
             "parse"
           ],
           "resumen": "El nombre de un tipo usado como función convierte un valor a ese tipo. Sirve, por ejemplo, para armar un texto con números y guardarlo en una variable.",
-          "sintaxis": "Entero(<valor>)\nReal(<valor>)\nString(<valor>)\nCaracter(<valor>)",
-          "ejemplo": "Programa promedio\nVar\n    suma, cantidad Entero\n    promedio Real\n    mensaje String\nInicio\n    suma = 23\n    cantidad = 3\n    promedio = Real(suma) / cantidad      // con Real(...) la división da decimales\n    mensaje = \"Promedio: \" + String(promedio)\n    Mostrar(mensaje)\n    Mostrar(Entero(promedio))             // 7: corta los decimales\nFin",
+          "sintaxis": "Entero(<valor>)\nReal(<valor>)\nCadena(<valor>)\nCaracter(<valor>)",
+          "ejemplo": "Programa promedio\nVar\n    suma, cantidad Entero\n    promedio Real\n    mensaje Cadena\nInicio\n    suma = 23\n    cantidad = 3\n    promedio = Real(suma) / cantidad      // con Real(...) la división da decimales\n    mensaje = \"Promedio: \" + Cadena(promedio)\n    Mostrar(mensaje)\n    Mostrar(Entero(promedio))             // 7: corta los decimales\nFin",
           "salida": "Promedio: 7.6666666667\n7",
           "recorda": "Entero(x) corta los decimales, no redondea: Entero(7.9) da 7.",
           "notas": [
-            "String(x) convierte cualquier valor a texto, igual que como lo mostraría Mostrar.",
+            "Cadena(x) convierte cualquier valor a texto, igual que como lo mostraría Mostrar.",
             "Entero(x): de un Real corta los decimales (7.9 da 7 y -7.9 da -7); de un texto lo lee como número (\"42\" da 42); de un Caracter que sea un dígito, ese dígito (Entero('7') da 7).",
             "Real(x): de un Entero, o de un texto con punto o coma (\"3.5\" o \"3,5\").",
-            "Caracter(x): de un Entero de una sola cifra, ese dígito (Caracter(7) da '7'); de un texto de una sola letra, esa letra. Para números de más de una cifra, String(x).",
+            "Caracter(x): de un Entero de una sola cifra, ese dígito (Caracter(7) da '7'); de un texto de una sola letra, esa letra. Para números de más de una cifra, Cadena(x).",
             "A Logico no se convierte: un Logico sale de una comparación.",
-            "Se usa el mismo nombre de tipo que en el resto del programa: si declaraste con String, es String(x) y no Cadena(x). Los alias también sirven: Int(x), Float(x), Char(x).",
+            "Se usa el mismo nombre de tipo que en el resto del programa: si declaraste con Cadena, es Cadena(x) y no String(x). Los alias también sirven: Int(x), Float(x), Char(x).",
             "Si el texto no es un número, o el número o el caracter no es un solo dígito, el programa se corta con un error que lo explica."
           ]
         }
@@ -883,6 +909,13 @@
     }
   ],
   "novedades": [
+    {
+      "id": "2026-10-substr",
+      "fecha": "2026-10-31",
+      "titulo": "Nueva función: SubStr",
+      "texto": "SubStr(entrada, cantidad) devuelve los primeros caracteres de un texto: SubStr(\"Mariana\", 3) da \"Mar\". Si pedís más caracteres de los que tiene, devuelve los que haya.",
+      "tema": "substr"
+    },
     {
       "id": "2026-10-referencia",
       "fecha": "2026-10-14",
